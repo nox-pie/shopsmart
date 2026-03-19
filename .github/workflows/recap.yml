@@ -1,0 +1,24 @@
+on: 
+  workflow_dispatch:
+    inputs:
+      name:
+        description: 'Name'
+        required: true
+        default: 'DevOps Engineer'
+      environment: 
+        description: 'Environment'
+        required: true
+        default: 'Production'
+
+jobs: 
+  recap-report: 
+    runs-on: ubuntu-latest
+    steps: 
+      - name: Send status recap
+        run: echo "Hello ${{ github.event.inputs.name }}, the ${{ github.event.inputs.environment }} environment recap has been triggered!"
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: List Files after checkout
+        run: ls -la
