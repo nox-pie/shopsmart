@@ -1,5 +1,3 @@
-## Demo change for PR
-
 # ShopSmart 🛍️
 
 [![CI Pipeline](https://github.com/nox-pie/shopsmart/actions/workflows/ci.yml/badge.svg)](https://github.com/nox-pie/shopsmart/actions/workflows/ci.yml)
