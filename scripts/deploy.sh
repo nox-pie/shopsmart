@@ -7,6 +7,24 @@ set -e # Exit on any failure
 
 echo "[INFO] Starting deployment process..."
 
+# 0. Idempotent Environment Bootstrapping
+if ! command -v node > /dev/null; then
+    echo "[INFO] Node.js not found. Installing Node.js 20.x..."
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+fi
+
+if ! command -v pm2 > /dev/null; then
+    echo "[INFO] PM2 not found. Installing PM2 globally..."
+    sudo npm install -g pm2
+fi
+
+if ! command -v nginx > /dev/null; then
+    echo "[INFO] Nginx not found. Installing Nginx..."
+    sudo apt-get update
+    sudo apt-get install -y nginx
+fi
+
 # 1. Idempotent Repository Setup
 TARGET_DIR="$HOME/shopsmart"
 mkdir -p "$TARGET_DIR"
