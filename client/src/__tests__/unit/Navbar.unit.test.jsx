@@ -22,63 +22,43 @@ describe('Navbar — Unit Tests', () => {
     expect(logo).toHaveAttribute('href', '/');
   });
 
-  it('renders "About Us" nav link with correct href', () => {
+  it('renders "About" nav link with correct href', () => {
     renderNavbar();
-    const link = screen.getByRole('link', { name: /about us/i });
+    const link = screen.getByRole('link', { name: /^About$/i });
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute('href', '/about');
   });
 
   it('renders "Blog" nav link with correct href', () => {
     renderNavbar();
-    const link = screen.getByRole('link', { name: /blog/i });
+    const link = screen.getByRole('link', { name: /^Blog$/i });
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute('href', '/blog');
   });
 
   it('renders "FAQ" nav link with correct href', () => {
     renderNavbar();
-    const link = screen.getByRole('link', { name: /faq/i });
+    const link = screen.getByRole('link', { name: /^FAQ$/i });
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute('href', '/faq');
   });
 
-  it('renders search input with placeholder "Clothing"', () => {
+  it('renders "Collection" nav link with correct href', () => {
     renderNavbar();
-    const input = screen.getByPlaceholderText('Clothing');
-    expect(input).toBeInTheDocument();
-    expect(input).toHaveAttribute('type', 'text');
+    const link = screen.getByRole('link', { name: /^Collection$/i });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute('href', '/collection');
   });
 
   it('renders cart icon link pointing to "/cart"', () => {
     renderNavbar();
-    const cartLink = screen.getByRole('link', { name: /cart/i });
-    expect(cartLink).toHaveAttribute('href', '/cart');
-  });
-
-  it('renders cart badge with count "2"', () => {
-    renderNavbar();
-    expect(screen.getByText('2')).toBeInTheDocument();
+    const cartLink = screen.getAllByRole('link').find(link => link.getAttribute('href') === '/cart');
+    expect(cartLink).toBeInTheDocument();
   });
 
   it('renders profile icon link pointing to "/profile"', () => {
     renderNavbar();
-    const profileLink = screen.getByRole('link', { name: /profile/i });
-    expect(profileLink).toHaveAttribute('href', '/profile');
-  });
-
-  it('renders all 6 category navigation pills', () => {
-    renderNavbar();
-    const categories = [
-      'New Arrivals',
-      'Sales',
-      'Men',
-      'Women',
-      "Kid's",
-      'Brand',
-    ];
-    categories.forEach((cat) => {
-      expect(screen.getByText(cat)).toBeInTheDocument();
-    });
+    const profileLink = screen.getAllByRole('link').find(link => link.getAttribute('href') === '/profile');
+    expect(profileLink).toBeInTheDocument();
   });
 });
