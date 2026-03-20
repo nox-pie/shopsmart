@@ -25,6 +25,12 @@ jobs:
             mkdir -p ~/shopsmart
             cd ~/shopsmart
             
-            # This triggers the idempotent script already pulled to the server
-            # Alternatively, running it raw here if the script itself does the pulling:
+            # Pull the latest code
+            if [ ! -d ".git" ]; then
+              git clone https://github.com/${{ github.repository }}.git .
+            else
+              git pull origin main
+            fi
+            
+            # Trigger the idempotent deployment script
             bash scripts/deploy.sh
