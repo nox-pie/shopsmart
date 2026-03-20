@@ -27,7 +27,7 @@ afterEach(() => {
 
 describe('API — Unit Tests (mocked fetch)', () => {
   it('getProducts() calls GET /api/products', async () => {
-    const mockData = [{ id: 1, name: 'T-Shirt' }];
+    const mockData = [{ id: 1, name: 'T-Shirt', image: 'img.jpg' }];
     mockFetch(mockData);
     const result = await getProducts();
     expect(global.fetch).toHaveBeenCalledWith('/api/products');
@@ -36,8 +36,8 @@ describe('API — Unit Tests (mocked fetch)', () => {
 
   it('getProducts() returns parsed JSON array', async () => {
     const mockData = [
-      { id: 1, name: 'Dress' },
-      { id: 2, name: 'Jeans' },
+      { id: 1, name: 'Dress', image: 'img1.jpg' },
+      { id: 2, name: 'Jeans', image: 'img2.jpg' },
     ];
     mockFetch(mockData);
     const result = await getProducts();
@@ -46,7 +46,7 @@ describe('API — Unit Tests (mocked fetch)', () => {
   });
 
   it('getProduct(id) calls GET /api/products/:id', async () => {
-    const mockData = { id: 42, name: 'Sneakers' };
+    const mockData = { id: 42, name: 'Sneakers', image: 'img.jpg' };
     mockFetch(mockData);
     const result = await getProduct(42);
     expect(global.fetch).toHaveBeenCalledWith('/api/products/42');
@@ -61,15 +61,16 @@ describe('API — Unit Tests (mocked fetch)', () => {
     expect(result).toEqual(mockData);
   });
 
-  it('addToCart(item) sends POST to /api/cart with correct body', async () => {
-    const item = { productId: 3, qty: 1 };
+  it('addToCart(productId, quantity) sends POST to /api/cart with correct body', async () => {
+    const productId = 3;
+    const quantity = 1;
     mockFetch({ success: true });
-    await addToCart(item);
+    await addToCart(productId, quantity);
     expect(global.fetch).toHaveBeenCalledWith(
       '/api/cart',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify(item),
+        body: JSON.stringify({ productId, quantity }),
         headers: expect.objectContaining({
           'Content-Type': 'application/json',
         }),
