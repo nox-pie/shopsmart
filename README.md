@@ -4,36 +4,47 @@
 [![EC2 Deployment](https://github.com/nox-pie/shopsmart/actions/workflows/deploy.yml/badge.svg)](https://github.com/nox-pie/shopsmart/actions/workflows/deploy.yml)
 [![Production Build](https://github.com/nox-pie/shopsmart/actions/workflows/build.yml/badge.svg)](https://github.com/nox-pie/shopsmart/actions/workflows/build.yml)
 
-A highly scalable, beautifully designed full-stack e-commerce web application.
+A highly scalable, beautifully designed full-stack e-commerce web application built with React, Express, and deployed on AWS EC2.
 
 ---
 
 ## Prerequisites
+
 - **Node.js** >= 18 (LTS recommended)
 - **npm** >= 9
 - **Git**
 
+---
+
 ## Quick Start (Running Locally)
 
 ### 1. Setup Backend
+
 ```bash
-# Terminal 1 - Boot the Express Server
+# Terminal 1 — Boot the Express Server
 cd server
 npm install
-npm run dev    # Starts backend typically on Localhost:3000
+npm run dev    # Starts backend on Localhost:3000
 ```
 
 ### 2. Setup Frontend
+
 ```bash
-# Terminal 2 - Boot the Vite React App
+# Terminal 2 — Boot the Vite React App
 cd client
 npm install
-npm run dev    # Starts frontend typically on Localhost:5173
+npm run dev    # Starts frontend on Localhost:5173
 ```
+
+| Service          | URL                    |
+|------------------|------------------------|
+| Frontend (Vite)  | http://localhost:5173   |
+| Backend API      | http://localhost:3000   |
 
 ---
 
 ## Project Structure
+
 ```text
 shopsmart/
 ├── .github/
@@ -50,7 +61,10 @@ shopsmart/
 │   │   ├── components/            # Reusable UI (Hero, Navbar)
 │   │   ├── pages/                 # SPA Routing Pages (Collection, Cart, FAQ, Blog)
 │   │   ├── __tests__/             # Unit and Integration Test Suites
+│   │   │   ├── unit/              # Isolated component rendering tests
+│   │   │   └── integration/       # Async state flow & API interaction tests
 │   │   ├── App.jsx                # Main HashRouter application component
+│   │   ├── App.test.jsx           # Root-level application test
 │   │   ├── index.css              # Custom Tailwind directives and animations
 │   │   ├── main.jsx               # React DOM rendering entry point
 │   │   └── setupTests.js          # Vitest DOM environment configuration
@@ -70,6 +84,7 @@ shopsmart/
 ├── server/                        # Express Backend Workspace
 │   ├── src/
 │   │   └── index.js               # Primary Express backend logic & REST API
+│   ├── tests/                     # Backend Jest test environment
 │   ├── eslint.config.mjs          # Backend Linting configuration
 │   └── package.json               # Server Node dependencies
 ├── scripts/
@@ -79,7 +94,7 @@ shopsmart/
 │   └── safe_ec2_control.sh        # Utility to cleanly manage EC2 states
 ├── ARCHITECTURE.md                # In-depth application architectural footprint
 ├── CONTRIBUTING.md                # CI/CD and Version Control team guidelines
-└── README.md                      # Foundational project documentation!
+└── README.md                      # Foundational project documentation
 ```
 
 ---
@@ -87,32 +102,47 @@ shopsmart/
 ## Technical Design Decisions
 
 1. **Premium Minimalist UI (Tailwind CSS)**
-   Rather than relying on bloated libraries, a custom "Premium Minimalist" aesthetic was deployed leveraging structural Tailwind CSS. This enabled glassmorphism, dynamic monochrome palettes, and rich micro-animations uniquely defining the brand.
+   Rather than relying on bloated CSS libraries like Bootstrap, a custom "Premium Minimalist" aesthetic was deployed leveraging Tailwind CSS. This enabled glassmorphism, dynamic monochrome palettes, skeleton loaders, and rich micro-animations uniquely defining the brand identity.
+
 2. **Zero-Dependency Idempotent Scripts**
-   The primary `scripts/deploy.sh` avoids manual EC2 configurations. It was hard-coded with a cold-boot sequence checking for `node`, `pm2`, and `nginx`, installing them automatically from standard OS targets if absent.
+   The primary `scripts/deploy.sh` avoids manual EC2 server setup. It includes a cold-boot detection sequence checking for `node`, `pm2`, and `nginx`, installing them automatically via `apt-get` if they are absent. Running the script 100 times produces the same result as running it once.
+
 3. **Frontend API Mocking Fallbacks**
-   To increase development velocity and prevent application white-screening, `api.js` has native catch sequences returning rich local dummy data. An offline backend no longer crashes the UI.
-4. **HashRouting Paradigm**
-   Choosing `HashRouter` solved default Single Page Application `<Route />` bugs common to Nginx instances, preventing `404 Not Found` loops during deep-linking.
+   To increase development velocity and prevent the application from white-screening when the backend is offline, `api.js` has native catch sequences returning rich local fallback data. This guarantees the UI renders flawlessly regardless of backend availability.
+
+4. **HashRouter over BrowserRouter**
+   Choosing `HashRouter` solved a critical SPA deployment bug where Nginx returns `404 Not Found` when users refresh pages like `/collection`. The hash-based URLs (`/#/collection`) ensure all traffic always resolves to `index.html`, eliminating the need for complex server-side URL rewriting.
+
+5. **In-Memory Data Store**
+   Products and cart data are stored in in-memory arrays rather than an external database, enabling zero-configuration setup and instant portability. This can be seamlessly upgraded to MongoDB or PostgreSQL when needed.
 
 ---
 
 ## GitHub Secrets Required (CI/CD)
-To enable the dynamic AWS deployment action, your repository requires these keys:
 
-| Secret Name    | Description                                            |
-|----------------|--------------------------------------------------------|
-| `EC2_HOST`     | The public IPv4 address of the EC2 instance            |
-| `EC2_USER`     | The SSH login username (e.g., `ubuntu` or `ec2-user`)  |
-| `EC2_SSH_KEY`  | The unclipped base64 text of the `.pem` private key    |
+To enable the automated AWS deployment action, the repository requires these secrets:
+
+| Secret Name    | Description                                                  |
+|----------------|--------------------------------------------------------------|
+| `EC2_HOST`     | The public IPv4 address of the EC2 instance                  |
+| `EC2_USER`     | The SSH login username (e.g., `ubuntu` or `ec2-user`)        |
+| `EC2_SSH_KEY`  | The complete contents of the `.pem` private key file         |
 
 ---
 
 ## Challenges and Solutions
 
-| Challenge                                    | Solution                                                                                   |
-|----------------------------------------------|--------------------------------------------------------------------------------------------|
-| Nginx 404ing on React SPAs                   | Integrated `HashRouter` eliminating server-side deep link parsing bugs.                    |
-| Fresh EC2 servers failing `npm ci` scripts   | Rewrote `deploy.sh` to defensively test for `node` and inject `apt-get` bootstrappers globally. |
-| E2E Playwright tests hanging on raw fetch    | Intercepted native URLs with `waitUntil: 'domcontentloaded'` allowing tests to bypass spinlocks. |
-| Mixed UI styling inconsistencies             | Consolidated everything into strict `theme.extend` classes within `tailwind.config.js`.    |
+| #  | Challenge | Root Cause | Solution |
+|----|-----------|------------|----------|
+| 1  | Nginx returns 404 on React SPA page refresh | Nginx looks for a physical `/collection` directory on disk which doesn't exist | Adopted `HashRouter` (`/#/collection`) so all URLs resolve to `index.html` without server-side rewrite rules |
+| 2  | Fresh EC2 server fails with `npm: command not found` | Brand new Ubuntu EC2 instances ship without Node.js, npm, or any runtime | Made `deploy.sh` idempotent: it auto-detects missing `node`, `pm2`, `nginx` and installs them via `apt-get` before proceeding |
+| 3  | Playwright E2E tests hanging indefinitely | `page.goto()` with default `waitUntil: 'load'` blocks forever when Vite's HMR WebSocket never fully resolves | Changed to `waitUntil: 'domcontentloaded'` and refined `page.route()` interception to avoid blocking Vite internal requests |
+| 4  | E2E navigation tests clicking wrong links | Multiple generic `<a>` elements matching the same pattern (e.g., multiple "Profile" links in navbar and footer) | Used highly specific Playwright locators targeting exact `href` attributes like `a[href='#/profile']` |
+| 5  | GitHub Actions deploy failing with `ssh: unable to authenticate` | The `.pem` key was incomplete — macOS Keychain Access refused to open it, causing manual copy to clip the header | Used terminal `pbcopy < key.pem` to copy the full key including `-----BEGIN RSA PRIVATE KEY-----` header |
+| 6  | GitHub submodule arrow icon persisting after folder deletion | The `nandu_shopsmart` reference folder was registered as a Git submodule, so `rm -rf` alone didn't remove its cached entry | Ran `git rm --cached nandu_shopsmart` and cleaned `.git/modules/` to fully purge the submodule reference |
+| 7  | Unit tests failing after UI redesign | Test assertions (`getByText('Shop Now')`) no longer matched the updated Premium Minimalist UI text (`'Explore Collection'`) | Rewrote all unit and integration test assertions to exactly match the redesigned component text and structure |
+| 8  | E2E category filter tests failing on `/#/collection` | `page.goto('/collection')` navigates to a raw path, but `HashRouter` requires `/#/collection` | Prefixed all E2E navigation URLs with `#` to align with the `HashRouter` URL scheme |
+| 9  | PostCSS config error crashing Vite dev server | Missing or misconfigured `postcss.config.js` after Tailwind CSS integration | Created a proper `postcss.config.js` with `tailwindcss` and `autoprefixer` plugins |
+| 10 | `source-map` dependency vulnerability in backend | Outdated transitive dependency flagged by `npm audit` | Regenerated `package-lock.json` with `npm audit fix` to pull patched versions |
+| 11 | Mixed UI styling inconsistencies across pages | Ad-hoc inline styles conflicting with Tailwind utility classes | Consolidated all custom properties into `theme.extend` within `tailwind.config.js` for a single source of truth |
+| 12 | Backend Jest cache permission errors on macOS | Jest's default cache directory lacked write permissions on restrictive macOS environments | Cleared the Jest cache with `npx jest --clearCache` and ensured proper directory permissions |
