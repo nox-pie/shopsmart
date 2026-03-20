@@ -13,12 +13,12 @@ test.describe('Homepage', () => {
     await expect(page.getByText('SHOPSMART')).toBeVisible();
   });
 
-  test('Shop Now button is visible on hero', async ({ page }) => {
-    await expect(page.getByRole('button', { name: /shop now/i })).toBeVisible();
+  test('Explore Collection button is visible on hero', async ({ page }) => {
+    await expect(page.getByRole('link', { name: /explore collection/i })).toBeVisible();
   });
 
-  test('15 Million+ customer stat is shown', async ({ page }) => {
-    await expect(page.getByText(/15 Million\+/i)).toBeVisible();
+  test('15M+ customer stat is shown', async ({ page }) => {
+    await expect(page.getByText(/15M\+/i)).toBeVisible();
   });
 
   test('page title is set (not blank)', async ({ page }) => {
