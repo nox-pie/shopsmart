@@ -39,7 +39,7 @@ npm run dev    # Starts frontend on Localhost:5173
 | Service          | URL                    |
 |------------------|------------------------|
 | Frontend (Vite)  | http://localhost:5173   |
-| Backend API      | http://localhost:3000   |
+| Backend API      | http://localhost:5001   |
 
 ---
 
