@@ -1,26 +1,52 @@
-# Contributing Workflow
+# Contributing & Workflow
 
-This document outlines the core workflows, CI/CD pipelines, and branch management strategies used by the ShopSmart team.
+This document outlines the core workflows, CI/CD pipelines, and rigorous testing strategies used by the ShopSmart team. We employ a trunk-based development strategy centered around the `main` branch.
 
-## 1. Version Control & Branching Workflow
-We employ a trunk-based development strategy centered around the `main` branch.
-*   **Meaningful Commits:** All changes are committed with granular, logical, and highly descriptive commit messages (e.g., `feat(client): implement premium hero section`, `fix(server): resolve PM2 caching permission`). Bulk commits are explicitly prohibited.
-*   **Pull Requests (PRs):** New features should be developed on feature branches and merged back into `main` using Pull Requests to ensure code review.
+---
 
-## 2. Continuous Integration (CI)
-GitHub Actions triggers our CI pipeline (`.github/workflows/ci.yml`) automatically on every push and PR to `main`.
-Our CI workflow enforces:
-*   **Code Quality:** strict structural enforcement using ESLint and formatting via Prettier.
-*   **Test Coverage:** Runs all Jest (Backend) and Vitest (Frontend) suites automatically.
-*   **E2E Integrity:** Automatically runs Playwright headless browser tests to ensure no UX regressions.
+## 1. Testing Strategy
 
-Any failing step in this pipeline explicitly blocks the Deployment phase.
+Comprehensive testing guarantees structural integrity before any code reaches AWS.
 
-## 3. Continuous Deployment (CD)
-Upon a successful CI run, the Continuous Deployment pipeline (`.github/workflows/deploy.yml`) is triggered.
-*   **Secure Auth:** Utilizing strictly injected GitHub Secrets (`EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY`).
-*   **Idempotency:** The pipeline executes `scripts/deploy.sh` on the AWS EC2 instance. This script is fully idempotent—meaning it automatically detects missing dependencies (like Node, Nginx, or PM2) and installs them dynamically if the server is performing a cold boot.
+### Frontend Testing (Vitest + Playwright)
 
-## 4. Automated Maintenance (Dependabot)
-Security vulnerabilities and outdated packages are managed automatically. 
-*   `.github/dependabot.yml` is configured to run weekly sweeps across both `npm` domains (client and server), generating automated PRs to securely bump package versions without manual developer overhead.
+| Type            | Command                              | Description                                  |
+|-----------------|--------------------------------------|----------------------------------------------|
+| **Unit**        | `cd client && npm run test:unit`     | Tests pure component rendering logic isolated from DOM mapping. |
+| **Integration** | `cd client && npm run test:integration` | Validates async state transitions (e.g., adding to cart, navbar active states). |
+| **E2E**         | `cd client && npx playwright test`   | Full automated browser testing covering complete user workflows (Category Pills, Navigation).|
+| **Linting**     | `cd client && npm run lint`          | Statically analyzes standard React rules.    |
+
+### Backend Testing (Jest)
+
+| Type            | Command                              | Description                                  |
+|-----------------|--------------------------------------|----------------------------------------------|
+| **Unit**        | `cd server && npm run test`          | Core logic checks including API handlers and data modeling. |
+| **Linting**     | `cd server && npm run lint`          | Prevents formatting and code-style regressions. |
+
+---
+
+## 2. CI/CD Pipeline Ecosystem
+
+Our entire infrastructure is automated via GitHub Actions, housed within `.github/workflows`.
+
+### Development CI (`ci.yml`)
+Triggers forcefully on any push or pull request to `main`.
+1. **ESLint Validation:** Scans both `server` and `client` directories independently.
+2. **Backend Checks:** Installs backend dependencies on cache and runs Node.js `jest` validations.
+3. **Frontend Checks:** Executes `vitest` unit/integration tests synchronously.
+
+### Production CD (`deploy.yml`)
+Triggers strictly on successful `pull` or manual `push` to `main`, provided CI passes.
+*   Authenticates to our remote AWS `.pem` key pairs via repository variables.
+*   Executes a native `appleboy/ssh-action` connecting strictly to our assigned `EC2_HOST`.
+*   Directly runs our `scripts/deploy.sh` file.
+
+### Maintenance CI (`dependabot.yml`)
+*   Scheduled weekly sweep of all `npm` modules across both spaces. Auto-generates Pull Requests to safely patch vulnerabilities, guaranteeing code is continuously modern.
+
+---
+
+## 3. Pull Request Standards
+*   **Meaningful Commits:** All changes are committed with granular, logical, and highly descriptive commit messages (e.g., `feat(client): implement premium hero section`). Bulk commits are explicitly prohibited.
+*   **PR Approval:** Feature branch integrations must pass the `ci.yml` matrix automatically before humans approve the request.
