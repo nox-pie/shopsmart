@@ -36,7 +36,7 @@ jobs:
           echo "🔹 Event: ${{ github.event_name }}"
       
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
@@ -85,7 +85,7 @@ jobs:
           echo "🔹 Event: ${{ github.event_name }}"
       
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
