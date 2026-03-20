@@ -117,9 +117,8 @@ describe('API Integration Tests', () => {
   it('addToCart() is called with the correct item payload', async () => {
     vi.spyOn(api, 'addToCart').mockResolvedValue({ success: true });
 
-    const item = { productId: 5, qty: 2 };
-    await api.addToCart(item);
-    expect(api.addToCart).toHaveBeenCalledWith(item);
+    await api.addToCart(5, 2);
+    expect(api.addToCart).toHaveBeenCalledWith(5, 2);
   });
 
   it('removeFromCart() is called with the correct id', async () => {
