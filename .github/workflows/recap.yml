@@ -18,7 +18,7 @@ jobs:
         run: echo "Hello ${{ github.event.inputs.name }}, the ${{ github.event.inputs.environment }} environment recap has been triggered!"
       
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         
       - name: List Files after checkout
         run: ls -la
