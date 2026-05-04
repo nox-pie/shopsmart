@@ -10,9 +10,15 @@ variable "project_name" {
   default     = "shopsmart"
 }
 
+variable "enable_ecs" {
+  type        = bool
+  description = "Whether to provision ECS resources (cluster, task, service, ECR, logs, SG). Set false in restricted learner accounts."
+  default     = false
+}
+
 variable "ecs_task_execution_role_arn" {
   type        = string
-  description = "IAM role ARN for ECS task execution (trust ecs-tasks.amazonaws.com + AmazonECSTaskExecutionRolePolicy). Set via GitHub secret ECS_TASK_EXECUTION_ROLE_ARN or TF_VAR_ecs_task_execution_role_arn."
+  description = "IAM role ARN for ECS task execution (trust ecs-tasks.amazonaws.com + AmazonECSTaskExecutionRolePolicy). Required only when enable_ecs=true."
   default     = ""
 
   validation {

@@ -1,4 +1,4 @@
-# Aligns with college rubric: Phase 1 tests + reports → Terraform (S3 + ECS) → Docker/ECR → ECS verify.
+# Aligns with college rubric: Phase 1 tests + reports → Terraform (S3 + optional ECS) → Docker/ECR → ECS verify.
 # Full apply/push/deploy runs on main (and manual dispatch) only; PRs run tests + reports.
 name: Infrastructure pipeline (rubric)
 
@@ -54,7 +54,7 @@ jobs:
           retention-days: 14
 
   terraform:
-    name: Phase 2 — Terraform (S3 + ECS)
+    name: Phase 2 — Terraform (S3 + learner-safe optional ECS)
     needs: test
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
@@ -68,6 +68,7 @@ jobs:
       ecs_service: ${{ steps.tfout.outputs.ecs_service }}
     env:
       TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
+      TF_VAR_enable_ecs: "false"
       TF_VAR_ecs_task_execution_role_arn: ${{ secrets.ECS_TASK_EXECUTION_ROLE_ARN }}
     steps:
       - name: Checkout
@@ -118,7 +119,7 @@ jobs:
   docker-ecs:
     name: Phase 3 — Docker, ECR, ECS
     needs: terraform
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:

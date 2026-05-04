@@ -5,17 +5,17 @@ output "s3_bucket_id" {
 
 output "ecr_repository_url" {
   description = "ECR repository URL (no tag) for docker tag/push."
-  value       = aws_ecr_repository.app.repository_url
+  value       = var.enable_ecs ? aws_ecr_repository.app[0].repository_url : ""
 }
 
 output "ecs_cluster_name" {
-  value = aws_ecs_cluster.main.name
+  value = var.enable_ecs ? aws_ecs_cluster.main[0].name : ""
 }
 
 output "ecs_service_name" {
-  value = aws_ecs_service.app.name
+  value = var.enable_ecs ? aws_ecs_service.app[0].name : ""
 }
 
 output "ecs_security_group_id" {
-  value = aws_security_group.ecs_tasks.id
+  value = var.enable_ecs ? aws_security_group.ecs_tasks[0].id : ""
 }

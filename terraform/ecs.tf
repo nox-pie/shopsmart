@@ -10,6 +10,7 @@ data "aws_subnets" "default" {
 }
 
 resource "aws_ecr_repository" "app" {
+  count                = var.enable_ecs ? 1 : 0
   name                 = "${var.project_name}-app-${random_id.bucket_suffix.hex}"
   image_tag_mutability = "MUTABLE"
 
@@ -19,11 +20,13 @@ resource "aws_ecr_repository" "app" {
 }
 
 resource "aws_cloudwatch_log_group" "ecs" {
+  count             = var.enable_ecs ? 1 : 0
   name              = "/ecs/${var.project_name}-${random_id.bucket_suffix.hex}"
   retention_in_days = 14
 }
 
 resource "aws_security_group" "ecs_tasks" {
+  count       = var.enable_ecs ? 1 : 0
   name_prefix = "${var.project_name}-ecs-${random_id.bucket_suffix.hex}-"
   description = "ShopSmart Fargate tasks"
   vpc_id      = data.aws_vpc.default.id
@@ -49,10 +52,12 @@ resource "aws_security_group" "ecs_tasks" {
 }
 
 resource "aws_ecs_cluster" "main" {
+  count = var.enable_ecs ? 1 : 0
   name = "${var.project_name}-cluster-${random_id.bucket_suffix.hex}"
 }
 
 resource "aws_ecs_task_definition" "app" {
+  count                    = var.enable_ecs ? 1 : 0
   family                   = "${var.project_name}-task-${random_id.bucket_suffix.hex}"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
@@ -76,7 +81,7 @@ resource "aws_ecs_task_definition" "app" {
   container_definitions = jsonencode([
     {
       name      = "shopsmart"
-      image     = "${aws_ecr_repository.app.repository_url}:latest"
+      image     = "${aws_ecr_repository.app[0].repository_url}:latest"
       essential = true
       portMappings = [
         {
@@ -87,7 +92,7 @@ resource "aws_ecs_task_definition" "app" {
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
+          "awslogs-group"         = aws_cloudwatch_log_group.ecs[0].name
           "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "ecs"
         }
@@ -104,9 +109,10 @@ resource "aws_ecs_task_definition" "app" {
 }
 
 resource "aws_ecs_service" "app" {
+  count                 = var.enable_ecs ? 1 : 0
   name                  = "${var.project_name}-svc-${random_id.bucket_suffix.hex}"
-  cluster               = aws_ecs_cluster.main.id
-  task_definition       = aws_ecs_task_definition.app.arn
+  cluster               = aws_ecs_cluster.main[0].id
+  task_definition       = aws_ecs_task_definition.app[0].arn
   desired_count         = 1
   launch_type           = "FARGATE"
   wait_for_steady_state = false
@@ -115,7 +121,7 @@ resource "aws_ecs_service" "app" {
 
   network_configuration {
     subnets          = data.aws_subnets.default.ids
-    security_groups  = [aws_security_group.ecs_tasks.id]
+    security_groups  = [aws_security_group.ecs_tasks[0].id]
     assign_public_ip = true
   }
 }
