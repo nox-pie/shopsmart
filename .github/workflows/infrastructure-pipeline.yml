@@ -106,23 +106,27 @@ jobs:
       - name: Reconcile pre-existing ECS resources into state
         run: |
           set -euo pipefail
-          SUFFIX="$(terraform state show random_id.bucket_suffix | awk '/hex =/ {gsub(/"/, "", $3); print $3}')"
-          if [ -z "${SUFFIX}" ]; then
-            echo "Could not resolve random suffix from state."
-            exit 1
+          SUFFIX=""
+          if terraform state list | rg "^random_id\\.bucket_suffix$" >/dev/null; then
+            SUFFIX="$(terraform state show random_id.bucket_suffix | awk '/hex =/ {gsub(/"/, "", $3); print $3}' || true)"
           fi
 
-          ECR_REPO="shopsmart-app-${SUFFIX}"
-          LOG_GROUP="/ecs/shopsmart-${SUFFIX}"
+          if [ -n "${SUFFIX}" ]; then
+            ECR_REPO="shopsmart-app-${SUFFIX}"
+            LOG_GROUP="/ecs/shopsmart-${SUFFIX}"
+          else
+            ECR_REPO="$(aws ecr describe-repositories --region "${{ secrets.AWS_REGION }}" --query "repositories[?starts_with(repositoryName, 'shopsmart-app-')].repositoryName | [0]" --output text 2>/dev/null || true)"
+            LOG_GROUP="$(aws logs describe-log-groups --region "${{ secrets.AWS_REGION }}" --log-group-name-prefix "/ecs/shopsmart-" --query "logGroups[0].logGroupName" --output text 2>/dev/null || true)"
+          fi
 
           if ! terraform state list | rg "^aws_ecr_repository\\.app\\[0\\]$" >/dev/null; then
-            if aws ecr describe-repositories --repository-names "${ECR_REPO}" --region "${{ secrets.AWS_REGION }}" >/dev/null 2>&1; then
+            if [ -n "${ECR_REPO}" ] && [ "${ECR_REPO}" != "None" ] && aws ecr describe-repositories --repository-names "${ECR_REPO}" --region "${{ secrets.AWS_REGION }}" >/dev/null 2>&1; then
               terraform import "aws_ecr_repository.app[0]" "${ECR_REPO}"
             fi
           fi
 
           if ! terraform state list | rg "^aws_cloudwatch_log_group\\.ecs\\[0\\]$" >/dev/null; then
-            if aws logs describe-log-groups --log-group-name-prefix "${LOG_GROUP}" --region "${{ secrets.AWS_REGION }}" --query "logGroups[?logGroupName=='${LOG_GROUP}'].logGroupName" --output text | rg "^${LOG_GROUP}$" >/dev/null; then
+            if [ -n "${LOG_GROUP}" ] && [ "${LOG_GROUP}" != "None" ] && aws logs describe-log-groups --log-group-name-prefix "${LOG_GROUP}" --region "${{ secrets.AWS_REGION }}" --query "logGroups[?logGroupName=='${LOG_GROUP}'].logGroupName" --output text | rg "^${LOG_GROUP}$" >/dev/null; then
               terraform import "aws_cloudwatch_log_group.ecs[0]" "${LOG_GROUP}"
             fi
           fi
