@@ -114,9 +114,17 @@ jobs:
           if [ -n "${SUFFIX}" ]; then
             ECR_REPO="shopsmart-app-${SUFFIX}"
             LOG_GROUP="/ecs/shopsmart-${SUFFIX}"
+            ECS_CLUSTER_NAME="shopsmart-cluster-${SUFFIX}"
+            ECS_SERVICE_NAME="shopsmart-svc-${SUFFIX}"
           else
             ECR_REPO="$(aws ecr describe-repositories --region "${{ secrets.AWS_REGION }}" --query "repositories[?starts_with(repositoryName, 'shopsmart-app-')].repositoryName | [0]" --output text 2>/dev/null || true)"
             LOG_GROUP="$(aws logs describe-log-groups --region "${{ secrets.AWS_REGION }}" --log-group-name-prefix "/ecs/shopsmart-" --query "logGroups[0].logGroupName" --output text 2>/dev/null || true)"
+            ECS_CLUSTER_NAME="$(aws ecs list-clusters --region "${{ secrets.AWS_REGION }}" --query "clusterArns[?contains(@, 'shopsmart-cluster-')] | [0]" --output text 2>/dev/null | sed -E 's|.*/||' || true)"
+            if [ -n "${ECS_CLUSTER_NAME}" ] && [ "${ECS_CLUSTER_NAME}" != "None" ]; then
+              ECS_SERVICE_NAME="$(aws ecs list-services --cluster "${ECS_CLUSTER_NAME}" --region "${{ secrets.AWS_REGION }}" --query "serviceArns[?contains(@, 'shopsmart-svc-')] | [0]" --output text 2>/dev/null | sed -E 's|.*/||' || true)"
+            else
+              ECS_SERVICE_NAME=""
+            fi
           fi
 
           if [ -n "${ECR_REPO}" ] && [ "${ECR_REPO}" != "None" ]; then
@@ -125,6 +133,14 @@ jobs:
 
           if [ -n "${LOG_GROUP}" ] && [ "${LOG_GROUP}" != "None" ]; then
             terraform import "aws_cloudwatch_log_group.ecs[0]" "${LOG_GROUP}" >/dev/null 2>&1 || true
+          fi
+
+          if [ -n "${ECS_CLUSTER_NAME}" ] && [ "${ECS_CLUSTER_NAME}" != "None" ]; then
+            terraform import "aws_ecs_cluster.main[0]" "${ECS_CLUSTER_NAME}" >/dev/null 2>&1 || true
+          fi
+
+          if [ -n "${ECS_CLUSTER_NAME}" ] && [ -n "${ECS_SERVICE_NAME}" ] && [ "${ECS_CLUSTER_NAME}" != "None" ] && [ "${ECS_SERVICE_NAME}" != "None" ]; then
+            terraform import "aws_ecs_service.app[0]" "${ECS_CLUSTER_NAME}/${ECS_SERVICE_NAME}" >/dev/null 2>&1 || true
           fi
 
       - name: Terraform plan
