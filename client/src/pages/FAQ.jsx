@@ -28,12 +28,12 @@ const FAQ = () => {
   ];
 
   return (
-    <div className="min-h-screen pt-32 pb-24 px-6 max-w-3xl mx-auto">
+    <div className="mx-auto min-h-[100dvh] min-h-screen max-w-3xl px-4 pb-20 pt-[calc(7.5rem+env(safe-area-inset-top,0px))] sm:px-6 sm:pb-24 sm:pt-32">
       <div className="text-center mb-16 animate-fade-up">
-        <h1 className="text-4xl md:text-5xl font-display font-bold text-prime mb-4">
+        <h1 className="mb-4 text-3xl font-display font-bold text-prime sm:text-4xl md:text-5xl">
           Frequently Asked Questions
         </h1>
-        <p className="text-lg text-slate-500">
+        <p className="text-base text-slate-500 sm:text-lg">
           Everything you need to know about our products and services.
         </p>
       </div>
@@ -45,7 +45,8 @@ const FAQ = () => {
             className={`border rounded-2xl transition-all duration-300 overflow-hidden ${openIndex === index ? 'border-prime bg-slate-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}
           >
             <button
-              className="w-full px-6 py-6 text-left flex justify-between items-center focus:outline-none"
+              type="button"
+              className="flex w-full items-start justify-between gap-3 px-4 py-5 text-left focus:outline-none sm:px-6 sm:py-6"
               onClick={() => setOpenIndex(openIndex === index ? -1 : index)}
             >
               <h3
@@ -59,7 +60,7 @@ const FAQ = () => {
               />
             </button>
             <div
-              className={`px-6 overflow-hidden transition-all duration-300 ease-in-out ${openIndex === index ? 'max-h-48 pb-6 opacity-100' : 'max-h-0 opacity-0'}`}
+              className={`overflow-hidden px-4 transition-all duration-300 ease-in-out sm:px-6 ${openIndex === index ? 'max-h-[min(28rem,75vh)] pb-6 opacity-100' : 'max-h-0 opacity-0'}`}
             >
               <p className="text-slate-500 leading-relaxed">{faq.answer}</p>
             </div>
@@ -69,9 +70,12 @@ const FAQ = () => {
 
       <div className="mt-16 text-center animate-fade-up animate-delay-200 flex flex-col items-center">
         <p className="text-slate-500 mb-4">Still have questions?</p>
-        <button className="px-8 py-3 bg-prime text-white rounded-full font-medium hover:bg-slate-800 transition-colors pointer-cursor">
+        <a
+          href="mailto:concierge@shopsmart.example?subject=ShopSmart%20Concierge"
+          className="inline-flex min-h-11 items-center justify-center rounded-full bg-prime px-8 py-3 font-medium text-white transition-colors hover:bg-slate-800"
+        >
           Contact Concierge
-        </button>
+        </a>
       </div>
     </div>
   );
