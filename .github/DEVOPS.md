@@ -13,7 +13,12 @@ This file documents GitHub settings that cannot live in YAML alone, plus how the
 | **Workflow order** Tests → Terraform → Docker → ECS | On **push to `main`** (and **workflow_dispatch**), jobs run in that sequence. **Pull requests** run **Phase 1 only** (tests + reports) so forks and branches without AWS secrets do not fail Terraform. |
 | **EC2 SSH deploy** (`deploy.yml`) | Optional / legacy demo; uses `EC2_*` secrets. If you rely only on the rubric ECS path, consider disabling automatic EC2 deploy on `main` to avoid two deploys at once (change triggers in `deploy.yml` or use environments). |
 
-**Terraform state:** The infrastructure workflow caches `terraform/terraform.tfstate` under the key `shopsmart-terraform-tfstate-main-v1` so repeated applies on `main` stay consistent. For team production use, switch to a remote **S3 backend** (separate state bucket) and update `terraform/versions.tf` accordingly.
+**Terraform state:** The infrastructure workflow caches `terraform/terraform.tfstate` under the key `shopsmart-terraform-tfstate-main-v2` so repeated applies on `main` stay consistent. For team production use, switch to a remote **S3 backend** (separate state bucket) and update `terraform/versions.tf` accordingly.
+
+### AWS Academy Learner Lab (common Phase 2 failures)
+
+- **`iam:CreateRole` AccessDenied:** Learner Lab roles usually **cannot create IAM roles**. This repo **does not** create an execution role in Terraform; it looks up an **existing** role by name (default **`ecsTaskExecutionRole`**). If that role does not exist, create it once in **IAM** (if the console allows) or use whatever execution role your instructor provides, then set Terraform variable `ecs_task_execution_role_name` locally or via a small `terraform.tfvars` in CI (advanced).
+- **`RepositoryAlreadyExists` / log group / security group already exists:** Happens when AWS already has resources but **Terraform state** is empty or out of sync. ECR, log group, ECS cluster/service, and security group names now include the same **random suffix** as the S3 bucket so a fresh apply avoids name clashes. The workflow **state cache key was bumped to v2** so the next run starts from a clean cached state file; old orphaned resources in the lab account can be deleted manually if you hit limits.
 
 ## 1. Branch protection on `main`
 

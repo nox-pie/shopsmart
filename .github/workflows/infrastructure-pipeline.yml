@@ -76,7 +76,7 @@ jobs:
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
         with:
           path: terraform/terraform.tfstate
-          key: shopsmart-terraform-tfstate-main-v1
+          key: shopsmart-terraform-tfstate-main-v2
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1

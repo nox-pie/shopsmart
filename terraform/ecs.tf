@@ -10,7 +10,7 @@ data "aws_subnets" "default" {
 }
 
 resource "aws_ecr_repository" "app" {
-  name                 = "${var.project_name}-app"
+  name                 = "${var.project_name}-app-${random_id.bucket_suffix.hex}"
   image_tag_mutability = "MUTABLE"
 
   image_scanning_configuration {
@@ -19,12 +19,12 @@ resource "aws_ecr_repository" "app" {
 }
 
 resource "aws_cloudwatch_log_group" "ecs" {
-  name              = "/ecs/${var.project_name}"
+  name              = "/ecs/${var.project_name}-${random_id.bucket_suffix.hex}"
   retention_in_days = 14
 }
 
 resource "aws_security_group" "ecs_tasks" {
-  name        = "${var.project_name}-ecs-tasks"
+  name_prefix = "${var.project_name}-ecs-${random_id.bucket_suffix.hex}-"
   description = "ShopSmart Fargate tasks"
   vpc_id      = data.aws_vpc.default.id
 
@@ -42,21 +42,23 @@ resource "aws_security_group" "ecs_tasks" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_ecs_cluster" "main" {
-  name = "${var.project_name}-cluster"
+  name = "${var.project_name}-cluster-${random_id.bucket_suffix.hex}"
 }
 
 resource "aws_ecs_task_definition" "app" {
-  family                   = "${var.project_name}-task"
+  family                   = "${var.project_name}-task-${random_id.bucket_suffix.hex}"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = "512"
   memory                   = "1024"
-  execution_role_arn       = aws_iam_role.ecs_execution.arn
-
-  depends_on = [aws_iam_role_policy_attachment.ecs_execution]
+  execution_role_arn       = data.aws_iam_role.ecs_execution.arn
 
   container_definitions = jsonencode([
     {
@@ -89,7 +91,7 @@ resource "aws_ecs_task_definition" "app" {
 }
 
 resource "aws_ecs_service" "app" {
-  name                  = "${var.project_name}-svc"
+  name                  = "${var.project_name}-svc-${random_id.bucket_suffix.hex}"
   cluster               = aws_ecs_cluster.main.id
   task_definition       = aws_ecs_task_definition.app.arn
   desired_count         = 1
