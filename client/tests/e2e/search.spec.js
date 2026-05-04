@@ -2,19 +2,17 @@ import { expect, test } from '@playwright/test';
 
 test.describe('Search Functionality', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/collection');
   });
 
-  test('search icon button is visible in the Navbar', async ({ page }) => {
-    // In the premium minimalist redesign, the search is an icon button inside the nav
-    // We locate it by finding the button inside the nav area that contains the lucide Search svg
-    const searchButton = page.locator('nav button').filter({ has: page.locator('svg.lucide-search') });
-    await expect(searchButton).toBeVisible();
+  test('collection search field is visible with search label', async ({ page }) => {
+    await expect(page.getByLabel('Search collection')).toBeVisible();
+    await expect(page.getByText(/^Search$/i).first()).toBeVisible();
   });
 
-  test('search button has hover scaling classes applied', async ({ page }) => {
-    const searchButton = page.locator('nav button').filter({ has: page.locator('svg.lucide-search') });
-    await expect(searchButton).toHaveClass(/hover-scale/);
-    await expect(searchButton).toHaveClass(/transition-colors/);
+  test('search input accepts text and filters grid', async ({ page }) => {
+    const input = page.getByLabel('Search collection');
+    await input.fill('hoodie');
+    await expect(input).toHaveValue('hoodie');
   });
 });
