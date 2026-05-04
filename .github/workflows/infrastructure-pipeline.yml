@@ -110,6 +110,10 @@ jobs:
           if terraform state list | rg "^random_id\\.bucket_suffix$" >/dev/null; then
             SUFFIX="$(terraform state show random_id.bucket_suffix | awk '/hex =/ {gsub(/"/, "", $3); print $3}' || true)"
           fi
+          if [ -z "${SUFFIX}" ] && terraform state list | rg "^aws_s3_bucket\\.artifacts$" >/dev/null; then
+            BUCKET_NAME="$(terraform state show aws_s3_bucket.artifacts | awk '/bucket =/ {gsub(/"/, "", $3); print $3}' || true)"
+            SUFFIX="$(echo "${BUCKET_NAME}" | sed -E 's/^shopsmart-artifacts-//' || true)"
+          fi
 
           if [ -n "${SUFFIX}" ]; then
             ECR_REPO="shopsmart-app-${SUFFIX}"
@@ -117,14 +121,10 @@ jobs:
             ECS_CLUSTER_NAME="shopsmart-cluster-${SUFFIX}"
             ECS_SERVICE_NAME="shopsmart-svc-${SUFFIX}"
           else
-            ECR_REPO="$(aws ecr describe-repositories --region "${{ secrets.AWS_REGION }}" --query "repositories[?starts_with(repositoryName, 'shopsmart-app-')].repositoryName | [0]" --output text 2>/dev/null || true)"
-            LOG_GROUP="$(aws logs describe-log-groups --region "${{ secrets.AWS_REGION }}" --log-group-name-prefix "/ecs/shopsmart-" --query "logGroups[0].logGroupName" --output text 2>/dev/null || true)"
-            ECS_CLUSTER_NAME="$(aws ecs list-clusters --region "${{ secrets.AWS_REGION }}" --query "clusterArns[?contains(@, 'shopsmart-cluster-')] | [0]" --output text 2>/dev/null | sed -E 's|.*/||' || true)"
-            if [ -n "${ECS_CLUSTER_NAME}" ] && [ "${ECS_CLUSTER_NAME}" != "None" ]; then
-              ECS_SERVICE_NAME="$(aws ecs list-services --cluster "${ECS_CLUSTER_NAME}" --region "${{ secrets.AWS_REGION }}" --query "serviceArns[?contains(@, 'shopsmart-svc-')] | [0]" --output text 2>/dev/null | sed -E 's|.*/||' || true)"
-            else
-              ECS_SERVICE_NAME=""
-            fi
+            ECR_REPO=""
+            LOG_GROUP=""
+            ECS_CLUSTER_NAME=""
+            ECS_SERVICE_NAME=""
           fi
 
           if [ -n "${ECR_REPO}" ] && [ "${ECR_REPO}" != "None" ]; then
