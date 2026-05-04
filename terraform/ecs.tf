@@ -89,11 +89,11 @@ resource "aws_ecs_task_definition" "app" {
 }
 
 resource "aws_ecs_service" "app" {
-  name                   = "${var.project_name}-svc"
-  cluster                = aws_ecs_cluster.main.id
-  task_definition        = aws_ecs_task_definition.app.arn
-  desired_count          = 1
-  launch_type            = "FARGATE"
+  name                  = "${var.project_name}-svc"
+  cluster               = aws_ecs_cluster.main.id
+  task_definition       = aws_ecs_task_definition.app.arn
+  desired_count         = 1
+  launch_type           = "FARGATE"
   wait_for_steady_state = false
 
   depends_on = [aws_ecs_task_definition.app]
