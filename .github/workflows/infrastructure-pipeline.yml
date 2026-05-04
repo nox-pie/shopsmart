@@ -123,7 +123,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      ECR_URL: ${{ needs.terraform.outputs.ecr_url }}
       ECS_CLUSTER: ${{ needs.terraform.outputs.ecs_cluster }}
       ECS_SERVICE: ${{ needs.terraform.outputs.ecs_service }}
     steps:
@@ -141,6 +140,14 @@ jobs:
       - name: Login to Amazon ECR
         id: ecr
         uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2.0.1
+
+      - name: Resolve ECR repository URL
+        run: |
+          set -eux
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          SUFFIX="$(echo "${ECS_SERVICE}" | sed -E 's/^.*-svc-//')"
+          ECR_URL="${ACCOUNT_ID}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/shopsmart-app-${SUFFIX}"
+          echo "ECR_URL=${ECR_URL}" >> "$GITHUB_ENV"
 
       - name: Build and push image
         env:
