@@ -11,6 +11,7 @@
     "format:check": "prettier --check \"src/**/*.{js,jsx,json,css,md}\"",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:report": "mkdir -p test-results && vitest run --reporter=default --reporter=junit --outputFile=./test-results/vitest-junit.xml",
     "test:watch": "vitest",
     "test:unit": "vitest run src/__tests__/unit",
     "test:integration": "vitest run src/__tests__/integration",
