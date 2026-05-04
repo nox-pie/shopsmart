@@ -53,7 +53,7 @@ resource "aws_security_group" "ecs_tasks" {
 
 resource "aws_ecs_cluster" "main" {
   count = var.enable_ecs ? 1 : 0
-  name = "${var.project_name}-cluster-${random_id.bucket_suffix.hex}"
+  name  = "${var.project_name}-cluster-${random_id.bucket_suffix.hex}"
 }
 
 resource "aws_ecs_task_definition" "app" {
