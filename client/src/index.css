@@ -2,8 +2,16 @@
 @config "../tailwind.config.js";
 
 @layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   body {
     @apply font-sans antialiased bg-surface text-prime overflow-x-hidden selection:bg-accent selection:text-white transition-colors duration-300;
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    -webkit-tap-highlight-color: transparent;
   }
 
   h1,
@@ -29,10 +37,18 @@
 
 @layer utilities {
   .glass {
-    @apply bg-white/70 backdrop-blur-md border border-white/40 shadow-[0_8px_32px_0_rgba(15,23,42,0.05)] transition-all duration-300;
+    @apply border-0 bg-white/78 backdrop-blur-xl transition-all duration-200 ease-out;
+    box-shadow:
+      0 24px 48px -18px rgba(15, 23, 42, 0.16),
+      0 12px 28px -12px rgba(15, 23, 42, 0.1),
+      0 4px 12px -4px rgba(15, 23, 42, 0.06);
   }
   .glass-dark {
-    @apply bg-prime/90 backdrop-blur-xl border border-white/10 shadow-xl;
+    @apply border-0 bg-prime/92 backdrop-blur-xl transition-all duration-200 ease-out;
+    box-shadow:
+      0 28px 56px -16px rgba(0, 0, 0, 0.42),
+      0 14px 32px -14px rgba(0, 0, 0, 0.28),
+      0 4px 14px -6px rgba(0, 0, 0, 0.18);
   }
   .hover-scale {
     @apply hover:scale-[1.02] active:scale-[0.98] transition-all duration-300;
