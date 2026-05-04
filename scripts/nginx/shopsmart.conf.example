@@ -1,0 +1,41 @@
+# Example Nginx site for ShopSmart (matches scripts/deploy.sh paths).
+#
+# Install on Ubuntu:
+#   sudo cp scripts/nginx/shopsmart.conf.example /etc/nginx/sites-available/shopsmart
+#   sudo ln -sf /etc/nginx/sites-available/shopsmart /etc/nginx/sites-enabled/
+#   sudo nginx -t && sudo systemctl reload nginx
+#
+# Environment variables (documented for operators; nginx does not read .env):
+#   EC2 / build host:
+#     - ShopSmart repo lives at $HOME/shopsmart; deploy copies static files to:
+#       /var/www/shopsmart/client/dist  (see deploy.sh WEB_ROOT + dist copy)
+#   Frontend build-time (Vite — set before `npm run build` on the server or in CI):
+#     VITE_API_URL   Public origin for the API, e.g. https://yourdomain.com
+#                    If the browser calls same-origin /api, use that full origin
+#                    or configure a relative base in client as your app requires.
+#   Backend runtime:
+#     PORT           Express listen port (default 5001 in server/src/index.js)
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name _;  # Replace with your domain, e.g. shopsmart.example.edu
+
+    root /var/www/shopsmart/client/dist;
+    index index.html;
+
+    # Static SPA (HashRouter — no deep-link rewrite required, but caching helps)
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Reverse proxy to PM2-managed Express (see deploy.sh: shopsmart-backend)
+    location /api/ {
+        proxy_pass http://127.0.0.1:5001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
