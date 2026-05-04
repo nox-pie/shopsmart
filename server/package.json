@@ -7,6 +7,7 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "test": "jest",
+    "test:report": "mkdir -p test-results && jest --ci",
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.{js,json,md}\"",
     "format:check": "prettier --check \"src/**/*.{js,json,md}\""
@@ -21,6 +22,7 @@
     "eslint": "^10.0.3",
     "globals": "^17.4.0",
     "jest": "^29.7.0",
+    "jest-junit": "^16.0.0",
     "nodemon": "^3.1.0",
     "prettier": "^3.8.1",
     "supertest": "^6.3.4"
