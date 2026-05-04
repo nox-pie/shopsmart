@@ -119,16 +119,12 @@ jobs:
             LOG_GROUP="$(aws logs describe-log-groups --region "${{ secrets.AWS_REGION }}" --log-group-name-prefix "/ecs/shopsmart-" --query "logGroups[0].logGroupName" --output text 2>/dev/null || true)"
           fi
 
-          if ! terraform state list | rg "^aws_ecr_repository\\.app\\[0\\]$" >/dev/null; then
-            if [ -n "${ECR_REPO}" ] && [ "${ECR_REPO}" != "None" ] && aws ecr describe-repositories --repository-names "${ECR_REPO}" --region "${{ secrets.AWS_REGION }}" >/dev/null 2>&1; then
-              terraform import "aws_ecr_repository.app[0]" "${ECR_REPO}" || true
-            fi
+          if [ -n "${ECR_REPO}" ] && [ "${ECR_REPO}" != "None" ]; then
+            terraform import "aws_ecr_repository.app[0]" "${ECR_REPO}" >/dev/null 2>&1 || true
           fi
 
-          if ! terraform state list | rg "^aws_cloudwatch_log_group\\.ecs\\[0\\]$" >/dev/null; then
-            if [ -n "${LOG_GROUP}" ] && [ "${LOG_GROUP}" != "None" ] && aws logs describe-log-groups --log-group-name-prefix "${LOG_GROUP}" --region "${{ secrets.AWS_REGION }}" --query "logGroups[?logGroupName=='${LOG_GROUP}'].logGroupName" --output text | rg "^${LOG_GROUP}$" >/dev/null; then
-              terraform import "aws_cloudwatch_log_group.ecs[0]" "${LOG_GROUP}" || true
-            fi
+          if [ -n "${LOG_GROUP}" ] && [ "${LOG_GROUP}" != "None" ]; then
+            terraform import "aws_cloudwatch_log_group.ecs[0]" "${LOG_GROUP}" >/dev/null 2>&1 || true
           fi
 
       - name: Terraform plan
