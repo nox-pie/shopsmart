@@ -1,7 +1,16 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import Navbar from '../../components/Navbar';
+
+vi.mock('../../api/api', () => ({
+  getCart: vi.fn(() =>
+    Promise.resolve({
+      items: [{ product: { id: 'm1', price: 55, name: 'Test' }, quantity: 3 }],
+      total: 165,
+    })
+  ),
+}));
 
 const renderNavbar = () =>
   render(
@@ -29,13 +38,17 @@ describe('Navbar Integration Tests', () => {
 
   it('Cart icon link has correct href for routing', () => {
     renderNavbar();
-    const cartLink = screen.getAllByRole('link').find(link => link.getAttribute('href') === '/cart');
+    const cartLink = screen
+      .getAllByRole('link')
+      .find((link) => link.getAttribute('href') === '/cart');
     expect(cartLink).toBeInTheDocument();
   });
 
   it('Profile icon link has correct href for routing', () => {
     renderNavbar();
-    const profileLink = screen.getAllByRole('link').find(link => link.getAttribute('href') === '/profile');
+    const profileLink = screen
+      .getAllByRole('link')
+      .find((link) => link.getAttribute('href') === '/profile');
     expect(profileLink).toBeInTheDocument();
   });
 
@@ -47,10 +60,11 @@ describe('Navbar Integration Tests', () => {
     );
   });
 
-  it('Cart badge displays correct item count', () => {
+  it('Cart badge displays correct item count', async () => {
     renderNavbar();
-    const badge = screen.getByText('3');
-    expect(badge).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('cart-count-badge')).toHaveTextContent('3');
+    });
   });
 
   it('Logo link sits inside the nav element', () => {

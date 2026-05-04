@@ -52,13 +52,17 @@ describe('Navbar — Unit Tests', () => {
 
   it('renders cart icon link pointing to "/cart"', () => {
     renderNavbar();
-    const cartLink = screen.getAllByRole('link').find(link => link.getAttribute('href') === '/cart');
+    const cartLink = screen
+      .getAllByRole('link')
+      .find((link) => link.getAttribute('href') === '/cart');
     expect(cartLink).toBeInTheDocument();
   });
 
   it('renders profile icon link pointing to "/profile"', () => {
     renderNavbar();
-    const profileLink = screen.getAllByRole('link').find(link => link.getAttribute('href') === '/profile');
+    const profileLink = screen
+      .getAllByRole('link')
+      .find((link) => link.getAttribute('href') === '/profile');
     expect(profileLink).toBeInTheDocument();
   });
 });

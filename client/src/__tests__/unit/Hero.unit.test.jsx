@@ -4,7 +4,12 @@ import { describe, expect, it } from 'vitest';
 import Hero from '../../components/Hero';
 
 describe('Hero — Unit Tests', () => {
-  const renderHero = () => render(<MemoryRouter><Hero /></MemoryRouter>);
+  const renderHero = () =>
+    render(
+      <MemoryRouter>
+        <Hero />
+      </MemoryRouter>
+    );
 
   it('renders the main heading "Unleash Your Style"', () => {
     renderHero();
@@ -13,12 +18,16 @@ describe('Hero — Unit Tests', () => {
 
   it('renders the "Explore Collection" button', () => {
     renderHero();
-    expect(screen.getByRole('link', { name: /explore collection/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /explore collection/i })
+    ).toBeInTheDocument();
   });
 
   it('renders the "Our Story" button', () => {
     renderHero();
-    expect(screen.getByRole('link', { name: /our story/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /our story/i })
+    ).toBeInTheDocument();
   });
 
   it('renders the "15M+" customer stat', () => {
