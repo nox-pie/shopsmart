@@ -108,7 +108,7 @@ There is **no** `/api/categories` route in the current server; categories appear
 
 ### 3.2 ECS Fargate (root `Dockerfile` + `terraform/` + `infrastructure-pipeline.yml`)
 
-1. **Terraform** provisions (among other things): versioned encrypted S3 bucket, ECR repo, ECS cluster, Fargate task definition (image `:latest`), service, security group, execution IAM role, CloudWatch log group (`terraform/s3.tf`, `terraform/ecs.tf`, `terraform/iam.tf`).
+1. **Terraform** provisions (among other things): versioned encrypted S3 bucket, ECR repo, ECS cluster, Fargate task definition (image `:latest`), service, security group, CloudWatch log group (`terraform/s3.tf`, `terraform/ecs.tf`). The **ECS task execution role** is not created by Terraform; its **ARN** is supplied at apply time (GitHub secret `ECS_TASK_EXECUTION_ROLE_ARN`) because many learner accounts cannot call `iam:CreateRole`.
 2. **CI** builds the image from the root **Dockerfile** (multi-stage: build client → install server prod deps → runtime user `shopsmart`, `HEALTHCHECK` on `/api/health`).
 3. Image is **pushed to ECR**; ECS service is **force-deployed** and waited on until **stable**.
 

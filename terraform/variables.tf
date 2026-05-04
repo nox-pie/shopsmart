@@ -10,9 +10,17 @@ variable "project_name" {
   default     = "shopsmart"
 }
 
-variable "ecs_task_execution_role_name" {
+variable "ecs_task_execution_role_arn" {
   type        = string
-  description = "Name of an existing IAM role for ECS task execution (no CreateRole in Terraform). In AWS Academy, use a role your lab already has, or create ecsTaskExecutionRole once via console if policy allows. Default: ecsTaskExecutionRole."
-  default     = "ecsTaskExecutionRole"
+  description = "IAM role ARN for ECS task execution (trust ecs-tasks.amazonaws.com + AmazonECSTaskExecutionRolePolicy). Set via GitHub secret ECS_TASK_EXECUTION_ROLE_ARN or TF_VAR_ecs_task_execution_role_arn."
+  default     = ""
+
+  validation {
+    condition = (
+      trimspace(var.ecs_task_execution_role_arn) == "" ||
+      startswith(var.ecs_task_execution_role_arn, "arn:aws:iam::")
+    )
+    error_message = "ecs_task_execution_role_arn must be empty or a valid IAM role ARN (arn:aws:iam::...)."
+  }
 }
 

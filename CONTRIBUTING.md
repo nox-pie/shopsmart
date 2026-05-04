@@ -119,7 +119,7 @@ All workflows live under **`.github/workflows/`**. Third-party actions are often
 |----------|----------|------|
 | **`ci.yml`** | Push & PR on all branches; `workflow_dispatch` | Primary quality gate: matrix tests, format, lint, client build, blocking audit. |
 | **`build.yml`** | Push to `main`, `workflow_dispatch` | Production Vite build + **upload-artifact** `client-dist` (server test job). |
-| **`infrastructure-pipeline.yml`** | Push & PR all branches; `workflow_dispatch` | **Phase 1** always: tests + JUnit artifact. **Phases 2–3** on `main` only: Terraform (S3, ECR, ECS) → Docker → ECR push → ECS stable wait. Needs **`AWS_*`** secrets. |
+| **`infrastructure-pipeline.yml`** | Push & PR all branches; `workflow_dispatch` | **Phase 1** always: tests + JUnit artifact. **Phases 2–3** on `main` only: Terraform (S3, ECR, ECS) → Docker → ECR push → ECS stable wait. Needs **`AWS_*`** secrets and **`ECS_TASK_EXECUTION_ROLE_ARN`**. |
 | **`deploy.yml`** | Push to `main` | SSH to EC2 using **`EC2_*`** secrets; GitHub Environment **`production`**. Runs `scripts/deploy.sh`. |
 | **`dependency-review.yml`** | Pull requests (same-repo head) | Flags new vulnerable dependencies (high+). |
 | **`variables_secrets.yml`** | `workflow_dispatch` | Demo: variables, `VITE_API_URL` build, artifact round-trip. |

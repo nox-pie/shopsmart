@@ -6,7 +6,7 @@ This file documents GitHub settings that cannot live in YAML alone, plus how the
 
 | Rubric item | Where it is implemented |
 |-------------|-------------------------|
-| **GitHub Secrets:** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION` | Required by [`.github/workflows/infrastructure-pipeline.yml`](workflows/infrastructure-pipeline.yml) for Terraform + ECR + ECS. `AWS_SESSION_TOKEN` can be left empty for long-lived IAM users; it is required when using temporary STS credentials. |
+| **GitHub Secrets:** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION`, **`ECS_TASK_EXECUTION_ROLE_ARN`** | Required by [`.github/workflows/infrastructure-pipeline.yml`](workflows/infrastructure-pipeline.yml). `AWS_SESSION_TOKEN` can be empty for long-lived IAM users. **`ECS_TASK_EXECUTION_ROLE_ARN`** is the full ARN of an **existing** IAM role for ECS task execution (Terraform cannot `CreateRole` in many learner accounts). |
 | **Phase 1 — Testing:** unit + integration tests, **test reports** | Same workflow **Phase 1** job: `client` Vitest + JUnit (`npm run test:report`), `server` Jest + JUnit (`npm run test:report`), artifact **`test-reports`**. |
 | **Phase 2 — Terraform:** init, validate, plan, apply; **S3** unique name, versioning, encryption, public access blocked | [`terraform/`](../terraform) — `s3.tf` + `terraform fmt`, `init`, `validate`, `plan`, `apply` in the pipeline. |
 | **Phase 3 — Docker + ECR + ECS Fargate**; Dockerfile: **multi-stage**, **non-root**, **HEALTHCHECK** | Root [`Dockerfile`](../Dockerfile); pipeline builds, pushes to ECR, `aws ecs update-service --force-new-deployment`, then `aws ecs wait services-stable`. |
@@ -17,8 +17,9 @@ This file documents GitHub settings that cannot live in YAML alone, plus how the
 
 ### AWS Academy Learner Lab (common Phase 2 failures)
 
-- **`iam:CreateRole` AccessDenied:** Learner Lab roles usually **cannot create IAM roles**. This repo **does not** create an execution role in Terraform; it looks up an **existing** role by name (default **`ecsTaskExecutionRole`**). If that role does not exist, create it once in **IAM** (if the console allows) or use whatever execution role your instructor provides, then set Terraform variable `ecs_task_execution_role_name` locally or via a small `terraform.tfvars` in CI (advanced).
-- **`RepositoryAlreadyExists` / log group / security group already exists:** Happens when AWS already has resources but **Terraform state** is empty or out of sync. ECR, log group, ECS cluster/service, and security group names now include the same **random suffix** as the S3 bucket so a fresh apply avoids name clashes. The workflow **state cache key was bumped to v2** so the next run starts from a clean cached state file; old orphaned resources in the lab account can be deleted manually if you hit limits.
+- **`couldn't find resource` for IAM role:** There is no default `ecsTaskExecutionRole` in every account. Add GitHub secret **`ECS_TASK_EXECUTION_ROLE_ARN`** with the **full ARN** of a role that (1) trusts **`ecs-tasks.amazonaws.com`** and (2) has **`AmazonECSTaskExecutionRolePolicy`** attached. Create that role in **IAM → Roles → Create role → Elastic Container Service → Elastic Container Service Task** if your lab allows; otherwise ask your instructor for an ARN.
+- **`iam:CreateRole` AccessDenied:** Terraform does **not** create this role; only the ARN is referenced.
+- **`RepositoryAlreadyExists` / log group / security group already exists:** Usually state vs AWS drift. ECR, log group, cluster, service, and SG names include the same **random suffix** as the S3 bucket; the Actions **state cache key is v2**. Delete orphaned old resources in the lab console if you hit limits.
 
 ## 1. Branch protection on `main`
 

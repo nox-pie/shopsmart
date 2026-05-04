@@ -68,6 +68,7 @@ jobs:
       ecs_service: ${{ steps.tfout.outputs.ecs_service }}
     env:
       TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
+      TF_VAR_ecs_task_execution_role_arn: ${{ secrets.ECS_TASK_EXECUTION_ROLE_ARN }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

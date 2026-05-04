@@ -148,6 +148,7 @@ Configure these **repository** secrets (names match the official rubric PDF):
 | `AWS_SECRET_ACCESS_KEY`  | IAM secret key |
 | `AWS_SESSION_TOKEN`      | Leave blank for long-lived IAM users; set when using temporary credentials |
 | `AWS_REGION`             | e.g. `us-east-1` (must match `terraform/variables.tf` default or override) |
+| `ECS_TASK_EXECUTION_ROLE_ARN` | Full ARN of an **existing** IAM role for ECS task execution (trust `ecs-tasks.amazonaws.com` + `AmazonECSTaskExecutionRolePolicy`). Required for Phase 2–3. |
 
 For Nginx layout and `VITE_API_URL` / `PORT` notes, use `scripts/nginx/shopsmart.conf.example` and [`.github/DEVOPS.md`](.github/DEVOPS.md).
 
