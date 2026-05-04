@@ -1,7 +1,11 @@
 #!/bin/bash
 
-# Configuration
-INSTANCE_ID=${1:-"i-0e54c628a35a0cd63"} # Allow passing instance ID via args, defaulting to fallback
+# Configuration: set EC2_INSTANCE_ID or pass instance id as the first argument.
+INSTANCE_ID="${EC2_INSTANCE_ID:-${1:-}}"
+if [ -z "$INSTANCE_ID" ]; then
+  echo "Usage: EC2_INSTANCE_ID=i-... $0   OR   $0 <instance_id>"
+  exit 1
+fi
 
 STATE=$(aws ec2 describe-instances \
   --instance-ids "$INSTANCE_ID" \

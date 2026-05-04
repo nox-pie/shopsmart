@@ -1,9 +1,15 @@
 #!/bin/bash
 
-INSTANCE_ID=${2:-"i-0e54c628a35a0cd63"}
+# Instance: set EC2_INSTANCE_ID or pass as second argument (after start|stop).
+INSTANCE_ID="${EC2_INSTANCE_ID:-${2:-}}"
 
 if [ -z "$1" ]; then
-  echo "Usage: $0 start|stop [instance_id]"
+  echo "Usage: EC2_INSTANCE_ID=i-... $0 start|stop   OR   $0 start|stop [instance_id]"
+  exit 1
+fi
+
+if [ -z "$INSTANCE_ID" ]; then
+  echo "Missing instance id. Set EC2_INSTANCE_ID or pass: $0 $1 <instance_id>"
   exit 1
 fi
 
