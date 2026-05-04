@@ -4,4 +4,8 @@ node_modules
 dist
 build
 coverage
+test-results
+.terraform
+*.tfstate
+*.tfstate.*
 .vercel
