@@ -9,4 +9,3 @@ test-results
 *.tfstate
 *.tfstate.*
 .vercel
-sai/

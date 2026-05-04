@@ -15,45 +15,43 @@ ShopSmart is a **single-page application (React)** backed by a **small Express R
 - **AWS ECS on Fargate** — One **multi-stage Docker image** runs Express and serves the built SPA from disk (`SHOPSMART_STATIC_DIR`), behind Terraform-managed networking and ECR.
 
 ```text
-                         ┌─────────────────────────────────────────┐
-                         │           Developers / CI               │
-                         │     git push, PRs, workflow_dispatch    │
-                         └────────────────────┬────────────────────┘
-                                              │
-                                              v
-┌─────────────────────────────────────────────────────────────────────────────┐
-│              GitHub — nox-pie/shopsmart (repository + Actions)              │
-│                                                                              │
-│  Quality & security (all branches / PRs where configured)                  │
-│  • ci.yml — matrix tests, Prettier, ESLint, Vite build, blocking npm audit │
-│  • dependency-review.yml — PR dependency/supply-chain review               │
-│                                                                              │
-│  Main-branch & manual jobs                                                   │
-│  • build.yml — client production build + upload-artifact (client/dist)     │
-│  • infrastructure-pipeline.yml — rubric: tests+JUnit → Terraform → Docker   │
-│    → ECR → ECS (push to main / dispatch only for Phases 2–3)               │
-│  • deploy.yml — SSH to EC2, git sync, scripts/deploy.sh (env: production)   │
-│                                                                              │
-│  Maintenance / demos                                                       │
-│  • dependabot.yml — npm + GitHub Actions + Terraform version bumps         │
-│  • recap.yml, variables_secrets.yml — manual teaching / demo workflows     │
-└─────────────────────────────────────────────────────────────────────────────┘
-          │                                    │
-          │ EC2 path                           │ ECS path (Terraform + ECR)
-          v                                    v
-┌──────────────────────────┐      ┌────────────────────────────────────────────┐
-│   AWS EC2 (Ubuntu)       │      │  AWS (same account/region as Terraform)   │
-│   Nginx :80              │      │  • S3 bucket (versioning, SSE, no public)│
-│   PM2 → Express :5001    │      │  • ECR repository (app image :latest)    │
-│   Static files in        │      │  • ECS Fargate service (public task IP   │
-│   /var/www/.../dist      │      │    or SG :5001 per terraform/ecs.tf)      │
-└──────────────────────────┘      └────────────────────────────────────────────┘
-                                              │
-                                              v
-                         ┌─────────────────────────────────────────┐
-                         │           End users (browser)           │
-                         │   HashRouter URLs: /#/…  +  /api/…      │
-                         └─────────────────────────────────────────┘
+                       +--------------------------------------+
+                       |            Developers / CI           |
+                       |   git push, PRs, workflow_dispatch  |
+                       +------------------+-------------------+
+                                          |
+                                          v
++--------------------------------------------------------------------------+
+|        GitHub - nox-pie/shopsmart (repository + Actions)                |
+|                                                                          |
+|  Quality & security                                                      |
+|  - ci.yml (tests, lint, format, build, audit)                           |
+|  - dependency-review.yml (PR supply-chain review)                        |
+|                                                                          |
+|  Main/dispatch jobs                                                      |
+|  - build.yml (client build artifact)                                     |
+|  - infrastructure-pipeline.yml (tests -> terraform -> docker -> ecs)     |
+|  - deploy.yml (SSH to EC2, run scripts/deploy.sh)                        |
+|                                                                          |
+|  Maintenance / demos                                                     |
+|  - dependabot.yml                                                        |
+|  - recap.yml, variables_secrets.yml                                      |
++--------------------------------------------------------------------------+
+          |                                       |
+          | EC2 path                              | ECS path
+          v                                       v
++-----------------------------+     +--------------------------------------+
+| AWS EC2 (Ubuntu)            |     | AWS account (Terraform-managed)      |
+| - Nginx :80                 |     | - S3 bucket (versioning + SSE)       |
+| - PM2 -> Express :5001      |     | - ECR repository                      |
+| - Static files under /var   |     | - ECS Fargate service                 |
++-----------------------------+     +--------------------------------------+
+                                          |
+                                          v
+                       +--------------------------------------+
+                       |          End users (browser)         |
+                       |      HashRouter URLs + /api/...      |
+                       +--------------------------------------+
 ```
 
 **Important:** Pushing to `main` can trigger **both** `deploy.yml` (EC2) and `infrastructure-pipeline.yml` (ECS) if both secret sets are configured. For a single production story, restrict one path (see `.github/DEVOPS.md`).
