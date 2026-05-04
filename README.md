@@ -1,6 +1,7 @@
 # ShopSmart 🛍️
 
 [![CI Pipeline](https://github.com/nox-pie/shopsmart/actions/workflows/ci.yml/badge.svg)](https://github.com/nox-pie/shopsmart/actions/workflows/ci.yml)
+[![Infrastructure pipeline](https://github.com/nox-pie/shopsmart/actions/workflows/infrastructure-pipeline.yml/badge.svg)](https://github.com/nox-pie/shopsmart/actions/workflows/infrastructure-pipeline.yml)
 [![EC2 Deployment](https://github.com/nox-pie/shopsmart/actions/workflows/deploy.yml/badge.svg)](https://github.com/nox-pie/shopsmart/actions/workflows/deploy.yml)
 [![Production Build](https://github.com/nox-pie/shopsmart/actions/workflows/build.yml/badge.svg)](https://github.com/nox-pie/shopsmart/actions/workflows/build.yml)
 
@@ -24,7 +25,7 @@ A highly scalable, beautifully designed full-stack e-commerce web application bu
 # Terminal 1 — Boot the Express Server
 cd server
 npm install
-npm run dev    # Starts backend on Localhost:3000
+npm run dev    # Starts backend on localhost:5001 (see server/src/index.js)
 ```
 
 ### 2. Setup Frontend
@@ -48,13 +49,16 @@ npm run dev    # Starts frontend on Localhost:5173
 ```text
 shopsmart/
 ├── .github/
+│   ├── DEVOPS.md                  # Branch protection, environments, nginx/env operator notes
 │   ├── workflows/
-│   │   ├── build.yml              # Production bundling and artifact generation
-│   │   ├── ci.yml                 # Main CI pipeline (Linting & Testing)
-│   │   ├── deploy.yml             # Native EC2 SSH deployment workflow
-│   │   ├── recap.yml              # Weekly automated code recap/summary
-│   │   └── variables_secrets.yml  # Utility defining environment topologies
-│   └── dependabot.yml             # Weekly security & dependency scanner
+│   │   ├── build.yml                   # Main-branch production build + artifact upload
+│   │   ├── ci.yml                      # Main CI pipeline (tests, lint, format, blocking audit)
+│   │   ├── dependency-review.yml      # PR dependency/supply-chain review
+│   │   ├── deploy.yml                  # EC2 SSH deploy (GitHub Environment: production)
+│   │   ├── infrastructure-pipeline.yml # Rubric: tests+reports → Terraform → Docker/ECR → ECS
+│   │   ├── recap.yml                   # Manual demo workflow (inputs)
+│   │   └── variables_secrets.yml       # Variables, secrets, and artifact demo
+│   └── dependabot.yml             # Weekly security & dependency updates
 ├── client/                        # React 18 Frontend Workspace
 │   ├── src/
 │   │   ├── api/                   # Fetch wrappers with Mock Fallbacks
@@ -87,11 +91,15 @@ shopsmart/
 │   ├── tests/                     # Backend Jest test environment
 │   ├── eslint.config.mjs          # Backend Linting configuration
 │   └── package.json               # Server Node dependencies
+├── terraform/                     # AWS: S3 (rubric) + ECR + ECS Fargate (rubric Phase 2–3)
+├── Dockerfile                     # Multi-stage production image (API + static SPA)
 ├── scripts/
 │   ├── deploy.sh                  # Idempotent automated AWS deployment script
-│   ├── ec2_health_check.sh        # Uptime and HTTP validation script
+│   ├── ec2_health_check.sh        # EC2 status (requires EC2_INSTANCE_ID or arg)
 │   ├── launch_ec2.sh              # EC2 initialization script
-│   └── safe_ec2_control.sh        # Utility to cleanly manage EC2 states
+│   ├── nginx/
+│   │   └── shopsmart.conf.example # Example Nginx site (paths match deploy.sh)
+│   └── safe_ec2_control.sh        # start/stop EC2 (requires EC2_INSTANCE_ID or arg)
 ├── ARCHITECTURE.md                # In-depth application architectural footprint
 ├── CONTRIBUTING.md                # CI/CD and Version Control team guidelines
 └── README.md                      # Foundational project documentation
@@ -120,13 +128,28 @@ shopsmart/
 
 ## GitHub Secrets Required (CI/CD)
 
-To enable the automated AWS deployment action, the repository requires these secrets:
+### EC2 SSH deploy (`deploy.yml`)
+
+Configure these secrets (repository secrets or under the **`production`** GitHub Environment — see [`.github/DEVOPS.md`](.github/DEVOPS.md)):
 
 | Secret Name    | Description                                                  |
 |----------------|--------------------------------------------------------------|
 | `EC2_HOST`     | The public IPv4 address of the EC2 instance                  |
 | `EC2_USER`     | The SSH login username (e.g., `ubuntu` or `ec2-user`)        |
 | `EC2_SSH_KEY`  | The complete contents of the `.pem` private key file         |
+
+### Rubric pipeline — Terraform, ECR, ECS (`infrastructure-pipeline.yml`)
+
+Configure these **repository** secrets (names match the official rubric PDF):
+
+| Secret Name              | Description |
+|--------------------------|-------------|
+| `AWS_ACCESS_KEY_ID`      | IAM access for Terraform, ECR, and ECS APIs |
+| `AWS_SECRET_ACCESS_KEY`  | IAM secret key |
+| `AWS_SESSION_TOKEN`      | Leave blank for long-lived IAM users; set when using temporary credentials |
+| `AWS_REGION`             | e.g. `us-east-1` (must match `terraform/variables.tf` default or override) |
+
+For Nginx layout and `VITE_API_URL` / `PORT` notes, use `scripts/nginx/shopsmart.conf.example` and [`.github/DEVOPS.md`](.github/DEVOPS.md).
 
 ---
 
