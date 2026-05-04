@@ -170,3 +170,6 @@ For Nginx layout and `VITE_API_URL` / `PORT` notes, use `scripts/nginx/shopsmart
 | 10 | `source-map` dependency vulnerability in backend | Outdated transitive dependency flagged by `npm audit` | Regenerated `package-lock.json` with `npm audit fix` to pull patched versions |
 | 11 | Mixed UI styling inconsistencies across pages | Ad-hoc inline styles conflicting with Tailwind utility classes | Consolidated all custom properties into `theme.extend` within `tailwind.config.js` for a single source of truth |
 | 12 | Backend Jest cache permission errors on macOS | Jest's default cache directory lacked write permissions on restrictive macOS environments | Cleared the Jest cache with `npx jest --clearCache` and ensured proper directory permissions |
+
+
+test
