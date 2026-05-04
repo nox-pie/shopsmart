@@ -6,19 +6,20 @@ This file documents GitHub settings that cannot live in YAML alone, plus how the
 
 | Rubric item | Where it is implemented |
 |-------------|-------------------------|
-| **GitHub Secrets:** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION` | Required by [`.github/workflows/infrastructure-pipeline.yml`](workflows/infrastructure-pipeline.yml). `AWS_SESSION_TOKEN` can be empty for long-lived IAM users. In learner-lab mode, ECS is disabled by default so no execution-role ARN secret is required. |
+| **GitHub Secrets:** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION` | Required by [`.github/workflows/infrastructure-pipeline.yml`](workflows/infrastructure-pipeline.yml). `AWS_SESSION_TOKEN` can be empty for long-lived IAM users. ECS defaults to using pre-existing `LabRole`; `ECS_TASK_EXECUTION_ROLE_ARN` is optional override only. |
 | **Phase 1 — Testing:** unit + integration tests, **test reports** | Same workflow **Phase 1** job: `client` Vitest + JUnit (`npm run test:report`), `server` Jest + JUnit (`npm run test:report`), artifact **`test-reports`**. |
-| **Phase 2 — Terraform:** init, validate, plan, apply; **S3** unique name, versioning, encryption, public access blocked | [`terraform/`](../terraform) — `s3.tf` + `terraform fmt`, `init`, `validate`, `plan`, `apply` in the pipeline. ECS resources are optional and controlled by `TF_VAR_enable_ecs`. |
-| **Phase 3 — Docker + ECR + ECS Fargate**; Dockerfile: **multi-stage**, **non-root**, **HEALTHCHECK** | Root [`Dockerfile`](../Dockerfile). This job is intentionally disabled in learner-lab mode because restricted accounts commonly block IAM role creation/pass-role needed by ECS tasks. |
+| **Phase 2 — Terraform:** init, validate, plan, apply; **S3** unique name, versioning, encryption, public access blocked | [`terraform/`](../terraform) — `s3.tf` + `terraform fmt`, `init`, `validate`, `plan`, `apply` in the pipeline. ECS resources are enabled (`TF_VAR_enable_ecs=true`) and use existing lab role by default. |
+| **Phase 3 — Docker + ECR + ECS Fargate**; Dockerfile: **multi-stage**, **non-root**, **HEALTHCHECK** | Root [`Dockerfile`](../Dockerfile); pipeline builds, pushes to ECR, then triggers ECS service rollout and waits for stable state. |
 | **Workflow order** Tests → Terraform → Docker → ECS | On **push to `main`** (and **workflow_dispatch**), jobs run in that sequence. **Pull requests** run **Phase 1 only** (tests + reports) so forks and branches without AWS secrets do not fail Terraform. |
 | **EC2 SSH deploy** (`deploy.yml`) | Optional / legacy demo; uses `EC2_*` secrets. If you rely only on the rubric ECS path, consider disabling automatic EC2 deploy on `main` to avoid two deploys at once (change triggers in `deploy.yml` or use environments). |
 
 **Terraform state:** The infrastructure workflow caches `terraform/terraform.tfstate` under the key `shopsmart-terraform-tfstate-main-v2` so repeated applies on `main` stay consistent. For team production use, switch to a remote **S3 backend** (separate state bucket) and update `terraform/versions.tf` accordingly.
 
-### AWS Academy Learner Lab (recommended mode)
+### AWS Academy Learner Lab (ECS mode with existing role)
 
-- Set `TF_VAR_enable_ecs=false` (already configured in this workflow) so Phase 2 validates and applies S3-only infrastructure safely.
-- Keep Phase 3 disabled unless your account can provide a valid ECS task execution role and pass-role permissions.
+- Terraform first tries explicit `ecs_task_execution_role_arn` (if provided), otherwise looks up IAM role name `LabRole`.
+- No role creation is done by Terraform for ECS execution role.
+- If your account still blocks ECS task launch with `iam:PassRole`, ask instructor to allow pass-role for the pre-created lab role.
 - **`RepositoryAlreadyExists` / log group / security group already exists:** Usually state vs AWS drift. ECR, log group, cluster, service, and SG names include the same **random suffix** as the S3 bucket; the Actions **state cache key is v2**. Delete orphaned old resources in the lab console if you hit limits.
 
 ## 1. Branch protection on `main`

@@ -13,12 +13,18 @@ variable "project_name" {
 variable "enable_ecs" {
   type        = bool
   description = "Whether to provision ECS resources (cluster, task, service, ECR, logs, SG). Set false in restricted learner accounts."
-  default     = false
+  default     = true
+}
+
+variable "ecs_lab_role_name" {
+  type        = string
+  description = "Pre-existing IAM role name to use for ECS task execution in learner accounts (for example, LabRole)."
+  default     = "LabRole"
 }
 
 variable "ecs_task_execution_role_arn" {
   type        = string
-  description = "IAM role ARN for ECS task execution (trust ecs-tasks.amazonaws.com + AmazonECSTaskExecutionRolePolicy). Required only when enable_ecs=true."
+  description = "Optional explicit IAM role ARN for ECS task execution. If empty, Terraform looks up ecs_lab_role_name."
   default     = ""
 
   validation {

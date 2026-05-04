@@ -119,7 +119,7 @@ All workflows live under **`.github/workflows/`**. Third-party actions are often
 |----------|----------|------|
 | **`ci.yml`** | Push & PR on all branches; `workflow_dispatch` | Primary quality gate: matrix tests, format, lint, client build, blocking audit. |
 | **`build.yml`** | Push to `main`, `workflow_dispatch` | Production Vite build + **upload-artifact** `client-dist` (server test job). |
-| **`infrastructure-pipeline.yml`** | Push & PR all branches; `workflow_dispatch` | **Phase 1** always: tests + JUnit artifact. **Phase 2** on `main` runs Terraform with learner-safe settings (`TF_VAR_enable_ecs=false`) so S3 plan/apply succeeds in restricted accounts. Phase 3 (Docker/ECS) stays disabled unless IAM permissions are available. |
+| **`infrastructure-pipeline.yml`** | Push & PR all branches; `workflow_dispatch` | **Phase 1** always: tests + JUnit artifact. On `main`, **Phase 2–3** run Terraform + Docker/ECR + ECS rollout. ECS uses pre-existing lab role (`LabRole`) by default (or optional ARN override). |
 | **`deploy.yml`** | Push to `main` | SSH to EC2 using **`EC2_*`** secrets; GitHub Environment **`production`**. Runs `scripts/deploy.sh`. |
 | **`dependency-review.yml`** | Pull requests (same-repo head) | Flags new vulnerable dependencies (high+). |
 | **`variables_secrets.yml`** | `workflow_dispatch` | Demo: variables, `VITE_API_URL` build, artifact round-trip. |
@@ -136,7 +136,7 @@ You do **not** need AWS credentials for everyday UI/API work. Touch this when ch
 | Artifact | Purpose |
 |----------|---------|
 | **`Dockerfile`** (repo root) | Multi-stage production image: builds client, copies `dist` into image, runs Express as non-root with `HEALTHCHECK`. |
-| **`terraform/`** | AWS resources for the rubric pipeline. S3 is always provisioned; ECS/ECR/logs/SG are gated behind `enable_ecs` for restricted learner accounts. Run `terraform fmt` before committing TF changes. |
+| **`terraform/`** | AWS resources for the rubric pipeline (S3, ECR, ECS Fargate, logs, security group). ECS execution role is looked up from existing `LabRole` unless overridden by ARN. Run `terraform fmt` before committing TF changes. |
 | **`scripts/deploy.sh`** | EC2 bootstrap: Node, PM2, Nginx, git pull, `npm ci`, build, copy static, reload Nginx. |
 
 Local Docker build (requires Docker daemon):

@@ -9,6 +9,15 @@ data "aws_subnets" "default" {
   }
 }
 
+data "aws_iam_role" "lab_role" {
+  count = var.enable_ecs && trimspace(var.ecs_task_execution_role_arn) == "" ? 1 : 0
+  name  = var.ecs_lab_role_name
+}
+
+locals {
+  ecs_execution_role_arn = var.enable_ecs ? (trimspace(var.ecs_task_execution_role_arn) != "" ? var.ecs_task_execution_role_arn : data.aws_iam_role.lab_role[0].arn) : ""
+}
+
 resource "aws_ecr_repository" "app" {
   count                = var.enable_ecs ? 1 : 0
   name                 = "${var.project_name}-app-${random_id.bucket_suffix.hex}"
@@ -63,20 +72,8 @@ resource "aws_ecs_task_definition" "app" {
   network_mode             = "awsvpc"
   cpu                      = "512"
   memory                   = "1024"
-  execution_role_arn       = var.ecs_task_execution_role_arn
-
-  lifecycle {
-    precondition {
-      condition     = trimspace(var.ecs_task_execution_role_arn) != ""
-      error_message = <<-EOT
-        Missing ECS task execution role ARN.
-        In GitHub: Settings → Secrets and variables → Actions → add repository secret
-        ECS_TASK_EXECUTION_ROLE_ARN (full ARN of a role that trusts ecs-tasks.amazonaws.com
-        and has the AWS managed policy AmazonECSTaskExecutionRolePolicy attached).
-        Create that role in IAM if your lab allows; otherwise ask your instructor for an ARN.
-      EOT
-    }
-  }
+  execution_role_arn       = local.ecs_execution_role_arn
+  task_role_arn            = local.ecs_execution_role_arn
 
   container_definitions = jsonencode([
     {

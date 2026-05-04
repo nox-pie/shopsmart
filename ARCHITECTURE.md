@@ -108,7 +108,7 @@ There is **no** `/api/categories` route in the current server; categories appear
 
 ### 3.2 ECS Fargate (root `Dockerfile` + `terraform/` + `infrastructure-pipeline.yml`)
 
-1. **Terraform** always provisions the rubric-required S3 resources. ECS/ECR resources are optional (`terraform/ecs.tf`) and controlled by `enable_ecs` so learner accounts without IAM role privileges can still pass Terraform checks.
+1. **Terraform** provisions rubric-required S3 resources and ECS/ECR resources for Phase 3. For ECS task execution, Terraform uses an existing lab IAM role (`LabRole`) by default, or an explicit ARN override if provided.
 2. **CI** builds the image from the root **Dockerfile** (multi-stage: build client → install server prod deps → runtime user `shopsmart`, `HEALTHCHECK` on `/api/health`).
 3. Image is **pushed to ECR**; ECS service is **force-deployed** and waited on until **stable**.
 
