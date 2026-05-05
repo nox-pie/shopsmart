@@ -1,6 +1,6 @@
 # ShopSmart Architecture
 
-This document describes the **logical architecture**, **technology stack**, **testing model**, and **deployment topology** of the ShopSmart full-stack e-commerce demo. It is kept aligned with the repository as of the post–mid-semester project state (CI/CD, Terraform, ECS, and EC2 paths).
+This document describes the **logical architecture**, **technology stack**, **testing model**, and **deployment topology** of the ShopSmart full-stack e-commerce demo. The rubric path is **Terraform (S3 + VPC + ECR + ALB + ECS Fargate) → Docker → ECR push → ECS**; **deploy.yml** remains an optional EC2/PM2 path.
 
 **Canonical GitHub repository:** [`nox-pie/shopsmart`](https://github.com/nox-pie/shopsmart) (`git@github.com:nox-pie/shopsmart.git`)
 
@@ -12,7 +12,7 @@ ShopSmart is a **single-page application (React)** backed by a **small Express R
 
 - **Local development** — Vite dev server (client) and Node (server), typically with Vite proxying `/api` to the backend.
 - **AWS EC2** — Classic VM deploy: Nginx serves static assets, PM2 runs the API, optional reverse proxy from Nginx to the API port.
-- **AWS ECS on Fargate** — One **multi-stage Docker image** runs Express and serves the built SPA from disk (`SHOPSMART_STATIC_DIR`), behind Terraform-managed networking and ECR.
+- **AWS ECS on Fargate (rubric)** — One **multi-stage Docker image** (root `Dockerfile`); **CI** pushes to **ECR**, **ALB** serves **HTTP :80** → tasks on **:5001**, **hash routes** and `/api` work same-origin.
 
 ```text
                        +--------------------------------------+
@@ -30,7 +30,7 @@ ShopSmart is a **single-page application (React)** backed by a **small Express R
 |                                                                          |
 |  Main/dispatch jobs                                                      |
 |  - build.yml (client build artifact)                                     |
-|  - infrastructure-pipeline.yml (tests -> terraform -> docker -> ecs)     |
+|  - infrastructure-pipeline.yml (tests -> terraform -> ECR push -> ECS Fargate) |
 |  - deploy.yml (SSH to EC2, run scripts/deploy.sh)                        |
 |                                                                          |
 |  Maintenance / demos                                                     |
@@ -38,13 +38,13 @@ ShopSmart is a **single-page application (React)** backed by a **small Express R
 |  - recap.yml, variables_secrets.yml                                      |
 +--------------------------------------------------------------------------+
           |                                       |
-          | EC2 path                              | ECS path
+          | EC2 + PM2 (`deploy.yml`)              | Rubric: TF + ECR + ECS (`infrastructure-pipeline.yml`)
           v                                       v
 +-----------------------------+     +--------------------------------------+
-| AWS EC2 (Ubuntu)            |     | AWS account (Terraform-managed)      |
+| AWS EC2 (Ubuntu)            |     | AWS account                          |
 | - Nginx :80                 |     | - S3 bucket (versioning + SSE)       |
-| - PM2 -> Express :5001      |     | - ECR repository                      |
-| - Static files under /var   |     | - ECS Fargate service                 |
+| - PM2 -> Express :5001      |     | - ECR, ECS Fargate, ALB :80           |
+| - Static files under /var   |     | - S3 bucket (versioning + SSE)         |
 +-----------------------------+     +--------------------------------------+
                                           |
                                           v
@@ -54,7 +54,7 @@ ShopSmart is a **single-page application (React)** backed by a **small Express R
                        +--------------------------------------+
 ```
 
-**Important:** Pushing to `main` can trigger **both** `deploy.yml` (EC2) and `infrastructure-pipeline.yml` (ECS) if both secret sets are configured. For a single production story, restrict one path (see `.github/DEVOPS.md`).
+**Important:** Pushing to `main` can run **both** `deploy.yml` and `infrastructure-pipeline.yml`—tune `on:` if you only want the rubric ECS path (see `.github/DEVOPS.md`).
 
 ---
 
@@ -104,13 +104,13 @@ There is **no** `/api/categories` route in the current server; categories appear
 3. **Client:** `npm ci`, `npm run build`, `dist` copied to `/var/www/shopsmart/client/dist` (see script).
 4. **Nginx** reload; example site config: `scripts/nginx/shopsmart.conf.example` (proxy `/api/` → `127.0.0.1:5001`).
 
-### 3.2 ECS Fargate (root `Dockerfile` + `terraform/` + `infrastructure-pipeline.yml`)
+### 3.2 Rubric pipeline — Terraform + ECR + ECS Fargate (`Dockerfile` + `infrastructure-pipeline.yml`)
 
-1. **Terraform** provisions rubric-required S3 resources and ECS/ECR resources for Phase 3. For ECS task execution, Terraform uses an existing lab IAM role (`LabRole`) by default, or an explicit ARN override if provided.
-2. **CI** builds the image from the root **Dockerfile** (multi-stage: build client → install server prod deps → runtime user `shopsmart`, `HEALTHCHECK` on `/api/health`).
-3. Image is **pushed to ECR**; ECS service is **force-deployed** and waited on until **stable**.
+1. **Terraform** (`terraform/`): **S3** artifacts bucket (unique name, versioning, SSE, public access blocked); **`vpc.tf`** VPC + public subnets; **ECR** repository; **ALB** + target group (health **`/api/health`**); **ECS cluster**, task definition, **Fargate service** registered behind the ALB.
+2. **CI** builds from the root **`Dockerfile`** (multi-stage, non-root `shopsmart` user, **`HEALTHCHECK`**).
+3. **CI** tags and **pushes** to **ECR**, runs **`aws ecs update-service --force-new-deployment`**, **`aws ecs wait services-stable`**, then **`curl`** the ALB DNS for **`/api/health`**.
 
-Terraform **state** for the rubric pipeline is cached in GitHub Actions under a fixed key on `main` (see `.github/DEVOPS.md` for production-grade remote state options).
+Terraform **state** is cached on **`main`** under a fixed Actions cache key (see `.github/DEVOPS.md` for remote state in production).
 
 ---
 
@@ -123,7 +123,7 @@ Terraform **state** for the rubric pipeline is cached in GitHub Actions under a 
 | **Testing** | Vitest 4 (unit + integration), Jest 29 + Supertest (API), Playwright (E2E under `client/tests/e2e/`) |
 | **Quality** | ESLint 8/10, Prettier 3, blocking `npm audit` (high+) on client and server in `ci.yml` |
 | **Containers** | Docker (multi-stage, non-root, healthcheck) |
-| **IaC / cloud** | Terraform 1.9+ (AWS provider ~> 5.x): S3, ECR, ECS, IAM, CloudWatch, EC2 read for VPC |
+| **IaC / cloud** | Terraform 1.9+ (AWS ~> 5.x): S3, VPC, ECR, ALB, ECS Fargate (`enable_ecs`) |
 | **CI/CD** | GitHub Actions (pinned action SHAs where configured), Dependabot (npm, actions, terraform) |
 | **Legacy / alt deploy** | AWS EC2, PM2, Nginx, SSH (`deploy.yml`) |
 
@@ -165,7 +165,7 @@ Terraform **state** for the rubric pipeline is cached in GitHub Actions under a 
 shopsmart/
 ├── client/                 # Vite + React SPA
 ├── server/                 # Express API
-├── terraform/              # AWS: S3 + ECR + ECS Fargate + IAM + logs
+├── terraform/              # AWS: S3, VPC, ECR, ALB, ECS Fargate
 ├── Dockerfile              # Production image: API + static dist
 ├── scripts/
 │   ├── deploy.sh           # EC2 idempotent deploy
@@ -196,6 +196,6 @@ shopsmart/
 1. **HashRouter** — Correctness on static hosts and simple Nginx without SPA fallback rules; trade-off: URLs contain `#`.
 2. **In-memory cart** — Zero database setup; trade-off: no durability or multi-tenant isolation.
 3. **Mock fallbacks in `api.js`** — Resilient UI for demos; trade-off: must not hide real production bugs—use env flags or monitoring if you harden beyond coursework.
-4. **Dual deploy (EC2 + ECS)** — Flexibility for different rubric or legacy demos; trade-off: two pipelines to maintain—prefer one for “real” production.
+4. **Dual deploy** (`deploy.yml` PM2 vs rubric Docker on EC2) — Flexibility; trade-off: two pipelines to maintain if both run on `main`.
 
 For operator checklists (secrets, branch protection, AWS IAM), use **`.github/DEVOPS.md`** alongside this document.

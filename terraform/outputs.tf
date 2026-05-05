@@ -19,3 +19,8 @@ output "ecs_service_name" {
 output "ecs_security_group_id" {
   value = var.enable_ecs ? aws_security_group.ecs_tasks[0].id : ""
 }
+
+output "alb_dns_name" {
+  description = "HTTP endpoint for the app (ALB forwards to the container on port 5001)."
+  value       = var.enable_ecs ? aws_lb.main[0].dns_name : ""
+}

@@ -128,27 +128,20 @@ shopsmart/
 
 ## GitHub Secrets Required (CI/CD)
 
-### EC2 SSH deploy (`deploy.yml`)
+### Rubric pipeline (`infrastructure-pipeline.yml`)
 
-Configure these secrets (repository secrets or under the **`production`** GitHub Environment — see [`.github/DEVOPS.md`](.github/DEVOPS.md)):
+Configure these **repository** secrets (matches typical evaluation criteria):
 
-| Secret Name    | Description                                                  |
-|----------------|--------------------------------------------------------------|
-| `EC2_HOST`     | The public IPv4 address of the EC2 instance                  |
-| `EC2_USER`     | The SSH login username (e.g., `ubuntu` or `ec2-user`)        |
-| `EC2_SSH_KEY`  | The complete contents of the `.pem` private key file         |
+| Secret Name             | Description |
+|-------------------------|-------------|
+| `AWS_ACCESS_KEY_ID`     | IAM access for Terraform, ECR, ECS, ELB |
+| `AWS_SECRET_ACCESS_KEY` | IAM secret key |
+| `AWS_SESSION_TOKEN`     | Leave blank for long-lived keys; set for temporary credentials |
+| `AWS_REGION`            | Must match `terraform/variables.tf` defaults or set `TF_VAR_availability_zones` for other regions |
 
-### Rubric pipeline — Terraform, ECR, ECS (`infrastructure-pipeline.yml`)
+**Workflow:** Phase 1 — client/server tests + JUnit reports → Phase 2 — Terraform (`fmt`, `init`, `validate`, `plan`, `apply`): **S3** (unique name, versioning, SSE, public access block), **VPC**, **ECR**, **ALB**, **ECS Fargate** → Phase 3 — **Docker build**, **push to ECR**, **ECS rolling deploy**, **`aws ecs wait services-stable`**, **HTTP health check** on the ALB (`/api/health`).
 
-Configure these **repository** secrets (names match the official rubric PDF):
-
-| Secret Name              | Description |
-|--------------------------|-------------|
-| `AWS_ACCESS_KEY_ID`      | IAM access for Terraform, ECR, and ECS APIs |
-| `AWS_SECRET_ACCESS_KEY`  | IAM secret key |
-| `AWS_SESSION_TOKEN`      | Leave blank for long-lived IAM users; set when using temporary credentials |
-| `AWS_REGION`             | e.g. `us-east-1` (must match `terraform/variables.tf` default or override) |
-| `ECS_TASK_EXECUTION_ROLE_ARN` | Optional override. If unset, Terraform uses an existing lab role named `LabRole` for ECS task execution. Set this only if your account uses a different pre-created execution role. |
+Optional **`deploy.yml`** (PM2/Nginx on EC2) uses **`EC2_HOST`**, **`EC2_USER`**, **`EC2_SSH_KEY`** — separate from the rubric ECS path.
 
 For Nginx layout and `VITE_API_URL` / `PORT` notes, use `scripts/nginx/shopsmart.conf.example` and [`.github/DEVOPS.md`](.github/DEVOPS.md).
 

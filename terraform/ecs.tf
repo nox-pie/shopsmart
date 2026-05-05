@@ -1,23 +1,12 @@
-data "aws_vpc" "default" {
-  default = true
+# ECS Fargate + ECR + ALB (Phase 3). LabRole ARN via caller identity (no iam:GetRole).
+data "aws_caller_identity" "current" {
+  count = var.enable_ecs && trimspace(var.ecs_task_execution_role_arn) == "" ? 1 : 0
 }
-
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-}
-
-# Lab accounts (e.g. Vocareum) often attach policies that deny iam:GetRole. Building the
-# execution-role ARN from sts:GetCallerIdentity + role name avoids that API while still
-# matching the role ECS uses (override with ecs_task_execution_role_arn if non-default).
-data "aws_caller_identity" "current" {}
 
 locals {
-  ecs_execution_role_arn = var.enable_ecs ? (
-    trimspace(var.ecs_task_execution_role_arn) != "" ? var.ecs_task_execution_role_arn : "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.ecs_lab_role_name}"
-  ) : ""
+  ecs_execution_role_arn = !var.enable_ecs ? "" : (
+    trimspace(var.ecs_task_execution_role_arn) != "" ? var.ecs_task_execution_role_arn : "arn:aws:iam::${data.aws_caller_identity.current[0].account_id}:role/${var.ecs_lab_role_name}"
+  )
 }
 
 resource "aws_ecr_repository" "app" {
@@ -36,18 +25,40 @@ resource "aws_cloudwatch_log_group" "ecs" {
   retention_in_days = 14
 }
 
+resource "aws_security_group" "alb" {
+  count       = var.enable_ecs ? 1 : 0
+  name        = "${var.project_name}-alb-${random_id.bucket_suffix.hex}"
+  description = "ALB for ShopSmart"
+  vpc_id      = aws_vpc.main[0].id
+
+  ingress {
+    description = "HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
 resource "aws_security_group" "ecs_tasks" {
   count       = var.enable_ecs ? 1 : 0
   name_prefix = "${var.project_name}-ecs-${random_id.bucket_suffix.hex}-"
   description = "ShopSmart Fargate tasks"
-  vpc_id      = data.aws_vpc.default.id
+  vpc_id      = aws_vpc.main[0].id
 
   ingress {
-    description = "App HTTP"
-    from_port   = 5001
-    to_port     = 5001
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    description     = "App from ALB"
+    from_port       = 5001
+    to_port         = 5001
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb[0].id]
   }
 
   egress {
@@ -59,6 +70,50 @@ resource "aws_security_group" "ecs_tasks" {
 
   lifecycle {
     create_before_destroy = true
+  }
+}
+
+resource "aws_lb" "main" {
+  count              = var.enable_ecs ? 1 : 0
+  name               = substr("${var.project_name}-alb-${random_id.bucket_suffix.hex}", 0, 32)
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb[0].id]
+  subnets            = aws_subnet.public[*].id
+
+  tags = {
+    Name = "${var.project_name}-alb"
+  }
+}
+
+resource "aws_lb_target_group" "app" {
+  count       = var.enable_ecs ? 1 : 0
+  name        = substr("${var.project_name}-tg-${random_id.bucket_suffix.hex}", 0, 32)
+  port        = 5001
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main[0].id
+  target_type = "ip"
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 30
+    path                = "/api/health"
+    matcher             = "200"
+  }
+}
+
+resource "aws_lb_listener" "http" {
+  count             = var.enable_ecs ? 1 : 0
+  load_balancer_arn = aws_lb.main[0].arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app[0].arn
   }
 }
 
@@ -108,19 +163,27 @@ resource "aws_ecs_task_definition" "app" {
 }
 
 resource "aws_ecs_service" "app" {
-  count                 = var.enable_ecs ? 1 : 0
-  name                  = "${var.project_name}-svc-${random_id.bucket_suffix.hex}"
-  cluster               = aws_ecs_cluster.main[0].id
-  task_definition       = aws_ecs_task_definition.app[0].arn
-  desired_count         = 1
-  launch_type           = "FARGATE"
-  wait_for_steady_state = false
+  count                              = var.enable_ecs ? 1 : 0
+  name                               = "${var.project_name}-svc-${random_id.bucket_suffix.hex}"
+  cluster                            = aws_ecs_cluster.main[0].id
+  task_definition                    = aws_ecs_task_definition.app[0].arn
+  desired_count                      = 1
+  launch_type                        = "FARGATE"
+  wait_for_steady_state              = false
+  deployment_minimum_healthy_percent = 50
+  deployment_maximum_percent         = 200
 
-  depends_on = [aws_ecs_task_definition.app]
+  load_balancer {
+    target_group_arn = aws_lb_target_group.app[0].arn
+    container_name   = "shopsmart"
+    container_port   = 5001
+  }
 
   network_configuration {
-    subnets          = data.aws_subnets.default.ids
+    subnets          = aws_subnet.public[*].id
     security_groups  = [aws_security_group.ecs_tasks[0].id]
     assign_public_ip = true
   }
+
+  depends_on = [aws_lb_listener.http]
 }

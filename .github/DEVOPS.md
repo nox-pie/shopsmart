@@ -6,21 +6,20 @@ This file documents GitHub settings that cannot live in YAML alone, plus how the
 
 | Rubric item | Where it is implemented |
 |-------------|-------------------------|
-| **GitHub Secrets:** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION` | Required by [`.github/workflows/infrastructure-pipeline.yml`](workflows/infrastructure-pipeline.yml). `AWS_SESSION_TOKEN` can be empty for long-lived IAM users. ECS defaults to using pre-existing `LabRole`; `ECS_TASK_EXECUTION_ROLE_ARN` is optional override only. |
-| **Phase 1 — Testing:** unit + integration tests, **test reports** | Same workflow **Phase 1** job: `client` Vitest + JUnit (`npm run test:report`), `server` Jest + JUnit (`npm run test:report`), artifact **`test-reports`**. |
-| **Phase 2 — Terraform:** init, validate, plan, apply; **S3** unique name, versioning, encryption, public access blocked | [`terraform/`](../terraform) — `s3.tf` + `terraform fmt`, `init`, `validate`, `plan`, `apply` in the pipeline. ECS resources are enabled (`TF_VAR_enable_ecs=true`) and use existing lab role by default. |
-| **Phase 3 — Docker + ECR + ECS Fargate**; Dockerfile: **multi-stage**, **non-root**, **HEALTHCHECK** | Root [`Dockerfile`](../Dockerfile); pipeline builds, pushes to ECR, then triggers ECS service rollout and waits for stable state. |
-| **Workflow order** Tests → Terraform → Docker → ECS | On **push to `main`** (and **workflow_dispatch**), jobs run in that sequence. **Pull requests** run **Phase 1 only** (tests + reports) so forks and branches without AWS secrets do not fail Terraform. |
-| **EC2 SSH deploy** (`deploy.yml`) | Optional / legacy demo; uses `EC2_*` secrets. If you rely only on the rubric ECS path, consider disabling automatic EC2 deploy on `main` to avoid two deploys at once (change triggers in `deploy.yml` or use environments). |
+| **GitHub Secrets** (rubric) | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION` for [`.github/workflows/infrastructure-pipeline.yml`](workflows/infrastructure-pipeline.yml). Optional `EC2_*` for [`deploy.yml`](workflows/deploy.yml) only. |
+| **Phase 1 — Testing:** unit + integration tests, **test reports** | `client` / `server` `npm run test:report`, artifact **`test-reports`**. |
+| **Phase 2 — Terraform:** init, validate, plan, apply; **S3** | [`terraform/`](../terraform): unique bucket, versioning, SSE, public access block; **`vpc.tf`** VPC + public subnets; **ECR**, **ALB**, **ECS Fargate**. Plan uses **`-refresh=false`** where labs deny some S3 read APIs. |
+| **Phase 3 — Docker + ECR + ECS** | Root [`Dockerfile`](../Dockerfile): **multi-stage**, **non-root**, **HEALTHCHECK**. Workflow: **build**, **push ECR**, **`ecs update-service`**, **`wait services-stable`**, **`curl` ALB `/api/health`**. |
+| **Workflow order** | Push/PR → Tests → (on `main`) Terraform → Docker build/push → ECS deploy → verify. PRs: Phase 1 only. |
+| **`deploy.yml`** (EC2 / PM2) | Separate optional path; does not replace Phase 3 ECR/ECS for the rubric. |
 
 **Terraform state:** The infrastructure workflow caches `terraform/terraform.tfstate` under the key `shopsmart-terraform-tfstate-main-v2` so repeated applies on `main` stay consistent. For team production use, switch to a remote **S3 backend** (separate state bucket) and update `terraform/versions.tf` accordingly.
 
-### AWS Academy Learner Lab (ECS mode with existing role)
+### Terraform ECS execution role
 
-- Terraform first tries explicit `ecs_task_execution_role_arn` (if provided), otherwise looks up IAM role name `LabRole`.
-- No role creation is done by Terraform for ECS execution role.
-- If your account still blocks ECS task launch with `iam:PassRole`, ask instructor to allow pass-role for the pre-created lab role.
-- **`RepositoryAlreadyExists` / log group / security group already exists:** Usually state vs AWS drift. ECR, log group, cluster, service, and SG names include the same **random suffix** as the S3 bucket; the Actions **state cache key is v2**. Delete orphaned old resources in the lab console if you hit limits.
+- Default **`enable_ecs = true`**. VPC is created in Terraform (`vpc.tf`).
+- Optional **`ecs_task_execution_role_arn`**; otherwise ARN is `arn:aws:iam::<account>:role/<ecs_lab_role_name>` from STS (no `iam:GetRole`).
+- Use **`LabRole`** (or your course role) with **`iam:PassRole`** / ECS permissions as required by the instructor account.
 
 ## 1. Branch protection on `main`
 

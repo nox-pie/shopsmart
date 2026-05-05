@@ -1,5 +1,5 @@
-# Aligns with college rubric: Phase 1 tests + reports → Terraform (S3 + ECS) → Docker/ECR → ECS verify.
-# Full apply/push/deploy runs on main (and manual dispatch) only; PRs run tests + reports.
+# Rubric workflow order: Push/PR → Tests → Terraform → Docker build & push → ECS Fargate → verify
+# Secrets (repository): AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN, AWS_REGION
 name: Infrastructure pipeline (rubric)
 
 permissions:
@@ -54,11 +54,11 @@ jobs:
           retention-days: 14
 
   terraform:
-    name: Phase 2 — Terraform (S3 + ECS)
+    name: Phase 2 — Terraform (S3 + VPC + ECR + ECS)
     needs: test
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: terraform
@@ -66,10 +66,10 @@ jobs:
       ecr_url: ${{ steps.tfout.outputs.ecr_url }}
       ecs_cluster: ${{ steps.tfout.outputs.ecs_cluster }}
       ecs_service: ${{ steps.tfout.outputs.ecs_service }}
+      alb_dns: ${{ steps.tfout.outputs.alb_dns }}
     env:
       TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
       TF_VAR_enable_ecs: "true"
-      TF_VAR_ecs_task_execution_role_arn: ${{ secrets.ECS_TASK_EXECUTION_ROLE_ARN }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -78,7 +78,7 @@ jobs:
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
         with:
           path: terraform/terraform.tfstate
-          key: shopsmart-terraform-tfstate-main-v2
+          key: shopsmart-terraform-tfstate-main-v3
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
@@ -103,18 +103,17 @@ jobs:
       - name: Terraform validate
         run: terraform validate
 
-      - name: Reconcile pre-existing ECS resources into state
+      - name: Reconcile pre-existing resources into state (best effort)
         run: |
           set -euo pipefail
           SUFFIX=""
-          if terraform state list | rg "^random_id\\.bucket_suffix$" >/dev/null; then
+          if terraform state list 2>/dev/null | grep -q '^random_id\.bucket_suffix$'; then
             SUFFIX="$(terraform state show random_id.bucket_suffix | awk '/hex =/ {gsub(/"/, "", $3); print $3}' || true)"
           fi
-          if [ -z "${SUFFIX}" ] && terraform state list | rg "^aws_s3_bucket\\.artifacts$" >/dev/null; then
+          if [ -z "${SUFFIX}" ] && terraform state list 2>/dev/null | grep -q '^aws_s3_bucket\.artifacts$'; then
             BUCKET_NAME="$(terraform state show aws_s3_bucket.artifacts | awk '/bucket =/ {gsub(/"/, "", $3); print $3}' || true)"
             SUFFIX="$(echo "${BUCKET_NAME}" | sed -E 's/^shopsmart-artifacts-//' || true)"
           fi
-
           if [ -n "${SUFFIX}" ]; then
             ECR_REPO="shopsmart-app-${SUFFIX}"
             LOG_GROUP="/ecs/shopsmart-${SUFFIX}"
@@ -126,25 +125,20 @@ jobs:
             ECS_CLUSTER_NAME=""
             ECS_SERVICE_NAME=""
           fi
-
           if [ -n "${ECR_REPO}" ] && [ "${ECR_REPO}" != "None" ]; then
             terraform import "aws_ecr_repository.app[0]" "${ECR_REPO}" >/dev/null 2>&1 || true
           fi
-
           if [ -n "${LOG_GROUP}" ] && [ "${LOG_GROUP}" != "None" ]; then
             terraform import "aws_cloudwatch_log_group.ecs[0]" "${LOG_GROUP}" >/dev/null 2>&1 || true
           fi
-
           if [ -n "${ECS_CLUSTER_NAME}" ] && [ "${ECS_CLUSTER_NAME}" != "None" ]; then
             terraform import "aws_ecs_cluster.main[0]" "${ECS_CLUSTER_NAME}" >/dev/null 2>&1 || true
           fi
-
-          if [ -n "${ECS_CLUSTER_NAME}" ] && [ -n "${ECS_SERVICE_NAME}" ] && [ "${ECS_CLUSTER_NAME}" != "None" ] && [ "${ECS_SERVICE_NAME}" != "None" ]; then
+          if [ -n "${ECS_CLUSTER_NAME}" ] && [ -n "${ECS_SERVICE_NAME}" ]; then
             terraform import "aws_ecs_service.app[0]" "${ECS_CLUSTER_NAME}/${ECS_SERVICE_NAME}" >/dev/null 2>&1 || true
           fi
 
-      # -refresh=false: some learner accounts deny S3 GetBucketVersioning/GetEncryption/GetPublicAccessBlock
-      # on refresh; apply still uses the saved plan without a second full refresh.
+      # Labs may deny S3 read APIs on refresh; plan uses cached state.
       - name: Terraform plan
         run: terraform plan -refresh=false -input=false -out=tfplan
 
@@ -153,20 +147,25 @@ jobs:
 
       - name: Export outputs
         id: tfout
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
         run: |
-          echo "ecr_url=$(terraform output -raw ecr_repository_url)" >> "$GITHUB_OUTPUT"
-          echo "ecs_cluster=$(terraform output -raw ecs_cluster_name)" >> "$GITHUB_OUTPUT"
-          echo "ecs_service=$(terraform output -raw ecs_service_name)" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          terraform output -json > tf_outputs.json
+          # Avoid GitHub masking dropping outputs that embed the region secret (see sai deploy-pipeline).
+          ECR_URL="$(jq -r '.ecr_repository_url.value' tf_outputs.json | sed "s/${AWS_REGION}/REGION_PLACEHOLDER/g")"
+          ALB_DNS="$(jq -r '.alb_dns_name.value' tf_outputs.json | sed "s/${AWS_REGION}/REGION_PLACEHOLDER/g")"
+          echo "ecr_url=${ECR_URL}" >> "$GITHUB_OUTPUT"
+          echo "ecs_cluster=$(jq -r '.ecs_cluster_name.value' tf_outputs.json)" >> "$GITHUB_OUTPUT"
+          echo "ecs_service=$(jq -r '.ecs_service_name.value' tf_outputs.json)" >> "$GITHUB_OUTPUT"
+          echo "alb_dns=${ALB_DNS}" >> "$GITHUB_OUTPUT"
 
-  docker-ecs:
-    name: Phase 3 — Docker, ECR, ECS
+  docker-build:
+    name: Phase 3 — Docker build & push (ECR)
     needs: terraform
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    env:
-      ECS_CLUSTER: ${{ needs.terraform.outputs.ecs_cluster }}
-      ECS_SERVICE: ${{ needs.terraform.outputs.ecs_service }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -180,37 +179,72 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Login to Amazon ECR
-        id: ecr
         uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2.0.1
-
-      - name: Resolve ECR repository URL
-        run: |
-          set -eux
-          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
-          SUFFIX="$(echo "${ECS_SERVICE}" | sed -E 's/^.*-svc-//')"
-          ECR_URL="${ACCOUNT_ID}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/shopsmart-app-${SUFFIX}"
-          echo "ECR_URL=${ECR_URL}" >> "$GITHUB_ENV"
 
       - name: Build and push image
         env:
+          RAW_ECR_URL: ${{ needs.terraform.outputs.ecr_url }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          set -eux
+          set -euxo pipefail
+          ECR_URL="${RAW_ECR_URL//REGION_PLACEHOLDER/$AWS_REGION}"
+          if [ -z "${ECR_URL}" ]; then
+            echo "Terraform did not pass ecr_repository_url."
+            exit 1
+          fi
           docker build -t "${ECR_URL}:${IMAGE_TAG}" -t "${ECR_URL}:latest" .
           docker push "${ECR_URL}:${IMAGE_TAG}"
           docker push "${ECR_URL}:latest"
 
+  deploy-ecs:
+    name: Phase 3 — ECS Fargate deploy & verify
+    needs: [terraform, docker-build]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
       - name: Force new ECS deployment
+        env:
+          ECS_CLUSTER: ${{ needs.terraform.outputs.ecs_cluster }}
+          ECS_SERVICE: ${{ needs.terraform.outputs.ecs_service }}
         run: |
+          set -euxo pipefail
           aws ecs update-service \
             --cluster "${ECS_CLUSTER}" \
             --service "${ECS_SERVICE}" \
             --force-new-deployment \
-            --region "${{ secrets.AWS_REGION }}"
+            --region "${AWS_REGION}"
 
-      - name: Wait for service stability
+      - name: Wait for ECS service stability
+        env:
+          ECS_CLUSTER: ${{ needs.terraform.outputs.ecs_cluster }}
+          ECS_SERVICE: ${{ needs.terraform.outputs.ecs_service }}
         run: |
+          set -euxo pipefail
           aws ecs wait services-stable \
             --cluster "${ECS_CLUSTER}" \
             --services "${ECS_SERVICE}" \
-            --region "${{ secrets.AWS_REGION }}"
+            --region "${AWS_REGION}"
+
+      - name: Verify deployment (ALB health)
+        env:
+          RAW_ALB_DNS: ${{ needs.terraform.outputs.alb_dns }}
+        run: |
+          set -euxo pipefail
+          ALB_DNS="${RAW_ALB_DNS//REGION_PLACEHOLDER/$AWS_REGION}"
+          echo "ALB: http://${ALB_DNS}"
+          sleep 15
+          curl -sfS --retry 5 --retry-delay 10 "http://${ALB_DNS}/api/health"
+          echo ""
+          echo "Health check passed."
