@@ -1,17 +1,26 @@
-# ECS Fargate + ECR + ALB (Phase 3). LabRole ARN via caller identity (no iam:GetRole).
+# ECS Fargate + ECR + ALB (Phase 3).
+# sai uses data.aws_iam_role.lab_role — optional via ecs_use_iam_role_lookup (needs iam:GetRole).
+# Default: STS-derived ARN when explicit ecs_task_execution_role_arn is empty (no GetRole).
+data "aws_iam_role" "lab_role" {
+  count = local.provision_ecs && var.ecs_use_iam_role_lookup ? 1 : 0
+  name  = var.ecs_lab_role_name
+}
+
 data "aws_caller_identity" "current" {
-  count = var.enable_ecs && trimspace(var.ecs_task_execution_role_arn) == "" ? 1 : 0
+  count = local.provision_ecs && !var.ecs_use_iam_role_lookup && trimspace(var.ecs_task_execution_role_arn) == "" ? 1 : 0
 }
 
 locals {
-  ecs_execution_role_arn = !var.enable_ecs ? "" : (
-    trimspace(var.ecs_task_execution_role_arn) != "" ? var.ecs_task_execution_role_arn : "arn:aws:iam::${data.aws_caller_identity.current[0].account_id}:role/${var.ecs_lab_role_name}"
+  ecs_execution_role_arn = !local.provision_ecs ? "" : (
+    trimspace(var.ecs_task_execution_role_arn) != "" ? var.ecs_task_execution_role_arn : (
+      var.ecs_use_iam_role_lookup ? data.aws_iam_role.lab_role[0].arn : "arn:aws:iam::${data.aws_caller_identity.current[0].account_id}:role/${var.ecs_lab_role_name}"
+    )
   )
 }
 
 resource "aws_ecr_repository" "app" {
-  count                = var.enable_ecs ? 1 : 0
-  name                 = "${var.project_name}-app-${random_id.bucket_suffix.hex}"
+  count                = local.provision_ecs ? 1 : 0
+  name                 = "${var.project_name}-app-${random_id.bucket_suffix[0].hex}"
   image_tag_mutability = "MUTABLE"
 
   image_scanning_configuration {
@@ -20,14 +29,14 @@ resource "aws_ecr_repository" "app" {
 }
 
 resource "aws_cloudwatch_log_group" "ecs" {
-  count             = var.enable_ecs ? 1 : 0
-  name              = "/ecs/${var.project_name}-${random_id.bucket_suffix.hex}"
+  count             = local.provision_ecs ? 1 : 0
+  name              = "/ecs/${var.project_name}-${random_id.bucket_suffix[0].hex}"
   retention_in_days = 14
 }
 
 resource "aws_security_group" "alb" {
-  count       = var.enable_ecs ? 1 : 0
-  name        = "${var.project_name}-alb-${random_id.bucket_suffix.hex}"
+  count       = local.provision_ecs ? 1 : 0
+  name        = "${var.project_name}-alb-${random_id.bucket_suffix[0].hex}"
   description = "ALB for ShopSmart"
   vpc_id      = aws_vpc.main[0].id
 
@@ -48,8 +57,8 @@ resource "aws_security_group" "alb" {
 }
 
 resource "aws_security_group" "ecs_tasks" {
-  count       = var.enable_ecs ? 1 : 0
-  name_prefix = "${var.project_name}-ecs-${random_id.bucket_suffix.hex}-"
+  count       = local.provision_ecs ? 1 : 0
+  name_prefix = "${var.project_name}-ecs-${random_id.bucket_suffix[0].hex}-"
   description = "ShopSmart Fargate tasks"
   vpc_id      = aws_vpc.main[0].id
 
@@ -74,8 +83,8 @@ resource "aws_security_group" "ecs_tasks" {
 }
 
 resource "aws_lb" "main" {
-  count              = var.enable_ecs ? 1 : 0
-  name               = substr("${var.project_name}-alb-${random_id.bucket_suffix.hex}", 0, 32)
+  count              = local.provision_ecs ? 1 : 0
+  name               = substr("${var.project_name}-alb-${random_id.bucket_suffix[0].hex}", 0, 32)
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb[0].id]
@@ -87,8 +96,8 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "app" {
-  count       = var.enable_ecs ? 1 : 0
-  name        = substr("${var.project_name}-tg-${random_id.bucket_suffix.hex}", 0, 32)
+  count       = local.provision_ecs ? 1 : 0
+  name        = substr("${var.project_name}-tg-${random_id.bucket_suffix[0].hex}", 0, 32)
   port        = 5001
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main[0].id
@@ -106,7 +115,7 @@ resource "aws_lb_target_group" "app" {
 }
 
 resource "aws_lb_listener" "http" {
-  count             = var.enable_ecs ? 1 : 0
+  count             = local.provision_ecs ? 1 : 0
   load_balancer_arn = aws_lb.main[0].arn
   port              = 80
   protocol          = "HTTP"
@@ -118,13 +127,13 @@ resource "aws_lb_listener" "http" {
 }
 
 resource "aws_ecs_cluster" "main" {
-  count = var.enable_ecs ? 1 : 0
-  name  = "${var.project_name}-cluster-${random_id.bucket_suffix.hex}"
+  count = local.provision_ecs ? 1 : 0
+  name  = "${var.project_name}-cluster-${random_id.bucket_suffix[0].hex}"
 }
 
 resource "aws_ecs_task_definition" "app" {
-  count                    = var.enable_ecs ? 1 : 0
-  family                   = "${var.project_name}-task-${random_id.bucket_suffix.hex}"
+  count                    = local.provision_ecs ? 1 : 0
+  family                   = "${var.project_name}-task-${random_id.bucket_suffix[0].hex}"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = "512"
@@ -163,8 +172,8 @@ resource "aws_ecs_task_definition" "app" {
 }
 
 resource "aws_ecs_service" "app" {
-  count                              = var.enable_ecs ? 1 : 0
-  name                               = "${var.project_name}-svc-${random_id.bucket_suffix.hex}"
+  count                              = local.provision_ecs ? 1 : 0
+  name                               = "${var.project_name}-svc-${random_id.bucket_suffix[0].hex}"
   cluster                            = aws_ecs_cluster.main[0].id
   task_definition                    = aws_ecs_task_definition.app[0].arn
   desired_count                      = 1

@@ -1,5 +1,6 @@
 # Rubric workflow order: Push/PR → Tests → Terraform → Docker build & push → ECS Fargate → verify
-# Secrets (repository): AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN, AWS_REGION
+# Secrets: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN, AWS_REGION
+# Vocareum (voc-cancel-cred): set repository Variable SKIP_AWS_CREATES=true — Terraform applies with zero AWS creates; Phase 3 jobs are skipped.
 name: Infrastructure pipeline (rubric)
 
 permissions:
@@ -15,6 +16,11 @@ on:
 concurrency:
   group: infra-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  PROJECT_NAME: shopsmart
+  TF_WORKING_DIR: terraform
 
 jobs:
   test:
@@ -69,16 +75,20 @@ jobs:
       alb_dns: ${{ steps.tfout.outputs.alb_dns }}
     env:
       TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
+      TF_VAR_enable_s3: "true"
       TF_VAR_enable_ecs: "true"
+      # Variable or secret SKIP_AWS_CREATES=true when voc-cancel-cred denies infrastructure creates (see README).
+      TF_VAR_skip_aws_creates: "${{ (vars.SKIP_AWS_CREATES == 'true' || secrets.SKIP_AWS_CREATES == 'true') && 'true' || 'false' }}"
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Cache Terraform state
+      - name: Cache Terraform state (local backend only)
+        if: ${{ secrets.TF_STATE_BUCKET == '' }}
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
         with:
           path: terraform/terraform.tfstate
-          key: shopsmart-terraform-tfstate-main-v3
+          key: shopsmart-terraform-tfstate-main-v4
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
@@ -97,8 +107,40 @@ jobs:
       - name: Terraform fmt
         run: terraform fmt -check -recursive
 
+      # sai deploy-pipeline.yml bootstraps a dedicated state bucket before init (optional).
+      - name: Bootstrap Terraform state bucket
+        if: ${{ secrets.TF_STATE_BUCKET != '' }}
+        env:
+          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+        run: |
+          set -euxo pipefail
+          R="${AWS_REGION}"
+          aws s3api head-bucket --bucket "${TF_STATE_BUCKET}" 2>/dev/null || {
+            if [ "$R" = "us-east-1" ]; then
+              aws s3api create-bucket --bucket "${TF_STATE_BUCKET}" --region "$R"
+            else
+              aws s3api create-bucket --bucket "${TF_STATE_BUCKET}" --region "$R" \
+                --create-bucket-configuration "LocationConstraint=${R}"
+            fi
+          }
+          aws s3api put-bucket-versioning \
+            --bucket "${TF_STATE_BUCKET}" \
+            --versioning-configuration Status=Enabled
+
       - name: Terraform init
-        run: terraform init -input=false
+        env:
+          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+        run: |
+          set -euxo pipefail
+          if [ -z "${TF_STATE_BUCKET:-}" ]; then
+            terraform init -input=false -backend=false
+          else
+            terraform init -input=false \
+              -backend-config="bucket=${TF_STATE_BUCKET}" \
+              -backend-config="key=shopsmart/terraform.tfstate" \
+              -backend-config="region=${AWS_REGION}" \
+              -backend-config="encrypt=true"
+          fi
 
       - name: Terraform validate
         run: terraform validate
@@ -107,11 +149,13 @@ jobs:
         run: |
           set -euo pipefail
           SUFFIX=""
-          if terraform state list 2>/dev/null | grep -q '^random_id\.bucket_suffix$'; then
-            SUFFIX="$(terraform state show random_id.bucket_suffix | awk '/hex =/ {gsub(/"/, "", $3); print $3}' || true)"
+          if terraform state list 2>/dev/null | grep -qE '^random_id\.bucket_suffix(\[0\])?$'; then
+            RS="$(terraform state list 2>/dev/null | grep -E '^random_id\.bucket_suffix(\[0\])?$' | head -1)"
+            SUFFIX="$(terraform state show "${RS}" | awk '/hex =/ {gsub(/"/, "", $3); print $3}' || true)"
           fi
-          if [ -z "${SUFFIX}" ] && terraform state list 2>/dev/null | grep -q '^aws_s3_bucket\.artifacts$'; then
-            BUCKET_NAME="$(terraform state show aws_s3_bucket.artifacts | awk '/bucket =/ {gsub(/"/, "", $3); print $3}' || true)"
+          if [ -z "${SUFFIX}" ] && terraform state list 2>/dev/null | grep -qE '^aws_s3_bucket\.artifacts(\[0\])?$'; then
+            BS="$(terraform state list 2>/dev/null | grep -E '^aws_s3_bucket\.artifacts(\[0\])?$' | head -1)"
+            BUCKET_NAME="$(terraform state show "${BS}" | awk '/bucket =/ {gsub(/"/, "", $3); print $3}' || true)"
             SUFFIX="$(echo "${BUCKET_NAME}" | sed -E 's/^shopsmart-artifacts-//' || true)"
           fi
           if [ -n "${SUFFIX}" ]; then
@@ -163,7 +207,9 @@ jobs:
   docker-build:
     name: Phase 3 — Docker build & push (ECR)
     needs: terraform
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: >-
+      github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && !(vars.SKIP_AWS_CREATES == 'true' || secrets.SKIP_AWS_CREATES == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -200,7 +246,9 @@ jobs:
   deploy-ecs:
     name: Phase 3 — ECS Fargate deploy & verify
     needs: [terraform, docker-build]
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: >-
+      github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && !(vars.SKIP_AWS_CREATES == 'true' || secrets.SKIP_AWS_CREATES == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:

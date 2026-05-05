@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars locally (do not commit secrets). Matches sai-style defaults.
+# Use a globally unique S3 name if you set s3_bucket_name (like sai’s shopsmart-artifacts-<user>).
+
+aws_region     = "us-east-1"
+project_name   = "shopsmart"
+environment    = "production"
+
+# Optional: fixed artifact bucket name (sai pattern). Leave unset to use random suffix in Terraform.
+# s3_bucket_name = "shopsmart-artifacts-YOUR_UNIQUE_SUFFIX"
+
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b"]
+
+# Set true only if your account allows iam:GetRole on LabRole (sai ecs.tf pattern).
+# Default false uses STS-derived execution role ARN (works when GetRole is denied).
+# ecs_use_iam_role_lookup = false

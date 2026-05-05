@@ -11,4 +11,8 @@ terraform {
       version = "~> 3.6"
     }
   }
+
+  # Remote state (sai pattern): configure via `terraform init -backend-config=...`
+  # or use `terraform init -backend=false` for local state (default CI without TF_STATE_BUCKET).
+  backend "s3" {}
 }

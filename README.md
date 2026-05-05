@@ -138,10 +138,15 @@ Configure these **repository** secrets (matches typical evaluation criteria):
 | `AWS_SECRET_ACCESS_KEY` | IAM secret key |
 | `AWS_SESSION_TOKEN`     | Leave blank for long-lived keys; set for temporary credentials |
 | `AWS_REGION`            | Must match `terraform/variables.tf` defaults or set `TF_VAR_availability_zones` for other regions |
+| `TF_STATE_BUCKET`       | **Optional.** Globally unique S3 bucket name for **remote Terraform state** (same pattern as the **sai** reference: bootstrap bucket in CI, then `terraform init` with S3 backend). If unset, CI uses **local state** + cache (`terraform init -backend=false`). Creating the bucket still requires `s3:CreateBucket` unless the bucket already exists. |
+
+**Repository variable (optional):** `SKIP_AWS_CREATES` — set to **`true`** for AWS Academy / Vocareum accounts where the **`voc-cancel-cred`** policy **denies creating** S3 buckets, VPCs, ECR repos, CloudWatch log groups, or ECS clusters. Terraform then runs **`validate` / `plan` / `apply`** with **no AWS creates**; Phase 3 (ECR push + ECS) jobs are **skipped**. Full rubric provisioning still requires an account that allows those APIs (or instructor-provided resources).
 
 **Workflow:** Phase 1 — client/server tests + JUnit reports → Phase 2 — Terraform (`fmt`, `init`, `validate`, `plan`, `apply`): **S3** (unique name, versioning, SSE, public access block), **VPC**, **ECR**, **ALB**, **ECS Fargate** → Phase 3 — **Docker build**, **push to ECR**, **ECS rolling deploy**, **`aws ecs wait services-stable`**, **HTTP health check** on the ALB (`/api/health`).
 
 Optional **`deploy.yml`** (PM2/Nginx on EC2) uses **`EC2_HOST`**, **`EC2_USER`**, **`EC2_SSH_KEY`** — separate from the rubric ECS path.
+
+**Matching the sai reference repo:** Layout and CI mirror **sai** where it makes sense (`terraform/main.tf` module map, optional **remote state** bootstrap, optional fixed **`s3_bucket_name`** via `terraform.tfvars`, optional **`ecs_use_iam_role_lookup`** = same as sai’s `data.aws_iam_role.lab_role` — set `true` only if **`iam:GetRole`** works). This repo defaults to **STS-based execution role ARN** so learner labs that deny `GetRole` still plan/apply. Terraform **cannot bypass IAM explicit denies**; if **sai** succeeds with the same secret *names*, the difference is almost always **different credentials or policies** behind those secrets.
 
 For Nginx layout and `VITE_API_URL` / `PORT` notes, use `scripts/nginx/shopsmart.conf.example` and [`.github/DEVOPS.md`](.github/DEVOPS.md).
 
