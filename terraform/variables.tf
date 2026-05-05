@@ -24,7 +24,7 @@ variable "ecs_lab_role_name" {
 
 variable "ecs_task_execution_role_arn" {
   type        = string
-  description = "Optional explicit IAM role ARN for ECS task execution. If empty, Terraform looks up ecs_lab_role_name."
+  description = "Optional explicit IAM role ARN for ECS task execution. If empty, Terraform uses arn:aws:iam::<current account>:role/<ecs_lab_role_name> (no iam:GetRole call)."
   default     = ""
 
   validation {

@@ -143,8 +143,10 @@ jobs:
             terraform import "aws_ecs_service.app[0]" "${ECS_CLUSTER_NAME}/${ECS_SERVICE_NAME}" >/dev/null 2>&1 || true
           fi
 
+      # -refresh=false: some learner accounts deny S3 GetBucketVersioning/GetEncryption/GetPublicAccessBlock
+      # on refresh; apply still uses the saved plan without a second full refresh.
       - name: Terraform plan
-        run: terraform plan -input=false -out=tfplan
+        run: terraform plan -refresh=false -input=false -out=tfplan
 
       - name: Terraform apply
         run: terraform apply -input=false -auto-approve tfplan

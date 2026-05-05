@@ -9,13 +9,15 @@ data "aws_subnets" "default" {
   }
 }
 
-data "aws_iam_role" "lab_role" {
-  count = var.enable_ecs && trimspace(var.ecs_task_execution_role_arn) == "" ? 1 : 0
-  name  = var.ecs_lab_role_name
-}
+# Lab accounts (e.g. Vocareum) often attach policies that deny iam:GetRole. Building the
+# execution-role ARN from sts:GetCallerIdentity + role name avoids that API while still
+# matching the role ECS uses (override with ecs_task_execution_role_arn if non-default).
+data "aws_caller_identity" "current" {}
 
 locals {
-  ecs_execution_role_arn = var.enable_ecs ? (trimspace(var.ecs_task_execution_role_arn) != "" ? var.ecs_task_execution_role_arn : data.aws_iam_role.lab_role[0].arn) : ""
+  ecs_execution_role_arn = var.enable_ecs ? (
+    trimspace(var.ecs_task_execution_role_arn) != "" ? var.ecs_task_execution_role_arn : "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.ecs_lab_role_name}"
+  ) : ""
 }
 
 resource "aws_ecr_repository" "app" {
