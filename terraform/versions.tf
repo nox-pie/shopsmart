@@ -12,7 +12,7 @@ terraform {
     }
   }
 
-  # Remote state (sai pattern): configure via `terraform init -backend-config=...`
-  # or use `terraform init -backend=false` for local state (default CI without TF_STATE_BUCKET).
-  backend "s3" {}
+  # Local backend by default (CI uses Actions cache on terraform/terraform.tfstate).
+  # For remote S3 state, use a root backend block with bucket/key/region or init -migrate-state;
+  # do not use an empty partial `backend "s3" {}` here — it breaks `terraform plan` unless init is perfect.
 }

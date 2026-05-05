@@ -6,7 +6,7 @@ This file documents GitHub settings that cannot live in YAML alone, plus how the
 
 | Rubric item | Where it is implemented |
 |-------------|-------------------------|
-| **GitHub Secrets** (rubric) | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION` for [`.github/workflows/infrastructure-pipeline.yml`](workflows/infrastructure-pipeline.yml). Optional **`TF_STATE_BUCKET`** — remote state (same idea as **sai**); optional `EC2_*` for [`deploy.yml`](workflows/deploy.yml) only. |
+| **GitHub Secrets** (rubric) | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION` for [`.github/workflows/infrastructure-pipeline.yml`](workflows/infrastructure-pipeline.yml). State is **local** in CI + Actions cache. Optional `EC2_*` for [`deploy.yml`](workflows/deploy.yml) only. |
 | **Repository variable** | `SKIP_AWS_CREATES=true` — Use on Vocareum/labs with **`voc-cancel-cred`** (denies `s3:CreateBucket`, `ec2:CreateVpc`, `ecr:CreateRepository`, etc.). Terraform applies **zero** resources; Phase 3 is skipped. |
 | **Phase 1 — Testing:** unit + integration tests, **test reports** | `client` / `server` `npm run test:report`, artifact **`test-reports`**. |
 | **Phase 2 — Terraform:** init, validate, plan, apply; **S3** | [`terraform/`](../terraform): unique bucket, versioning, SSE, public access block; **`vpc.tf`** VPC + public subnets; **ECR**, **ALB**, **ECS Fargate**. Plan uses **`-refresh=false`** where labs deny some S3 read APIs. |

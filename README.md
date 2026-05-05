@@ -138,7 +138,6 @@ Configure these **repository** secrets (matches typical evaluation criteria):
 | `AWS_SECRET_ACCESS_KEY` | IAM secret key |
 | `AWS_SESSION_TOKEN`     | Leave blank for long-lived keys; set for temporary credentials |
 | `AWS_REGION`            | Must match `terraform/variables.tf` defaults or set `TF_VAR_availability_zones` for other regions |
-| `TF_STATE_BUCKET`       | **Optional.** Globally unique S3 bucket name for **remote Terraform state** (same pattern as the **sai** reference: bootstrap bucket in CI, then `terraform init` with S3 backend). If unset, CI uses **local state** + cache (`terraform init -backend=false`). Creating the bucket still requires `s3:CreateBucket` unless the bucket already exists. |
 
 **Repository variable or secret (optional):** `SKIP_AWS_CREATES` — set to **`true`** (Variable **or** Secret) for AWS Academy / Vocareum accounts where **`voc-cancel-cred`** **denies creating** infrastructure. Terraform runs **`validate` / `plan` / `apply`** with **no AWS creates**; Phase 3 jobs are **skipped** via a workflow gate (GitHub does not allow `secrets` in `if:` expressions, so the workflow reads both Variable and Secret in a step). Full rubric provisioning still requires an account that allows those APIs (or instructor-provided resources).
 
@@ -146,7 +145,7 @@ Configure these **repository** secrets (matches typical evaluation criteria):
 
 Optional **`deploy.yml`** (PM2/Nginx on EC2) uses **`EC2_HOST`**, **`EC2_USER`**, **`EC2_SSH_KEY`** — separate from the rubric ECS path.
 
-**Matching the sai reference repo:** Layout and CI mirror **sai** where it makes sense (`terraform/main.tf` module map, optional **remote state** bootstrap, optional fixed **`s3_bucket_name`** via `terraform.tfvars`, optional **`ecs_use_iam_role_lookup`** = same as sai’s `data.aws_iam_role.lab_role` — set `true` only if **`iam:GetRole`** works). This repo defaults to **STS-based execution role ARN** so learner labs that deny `GetRole` still plan/apply. Terraform **cannot bypass IAM explicit denies**; if **sai** succeeds with the same secret *names*, the difference is almost always **different credentials or policies** behind those secrets.
+**Matching the sai reference repo:** Same layout ideas (`terraform/main.tf` map, optional fixed **`s3_bucket_name`** in `terraform.tfvars`, optional **`ecs_use_iam_role_lookup`** like sai’s `data.aws_iam_role.lab_role`). CI keeps **local Terraform state** + cache so `terraform plan` does not depend on a partial S3 backend block. Terraform **cannot bypass IAM explicit denies**.
 
 For Nginx layout and `VITE_API_URL` / `PORT` notes, use `scripts/nginx/shopsmart.conf.example` and [`.github/DEVOPS.md`](.github/DEVOPS.md).
 

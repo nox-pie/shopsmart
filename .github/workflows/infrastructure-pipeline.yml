@@ -94,22 +94,11 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # secrets.* cannot be used in step `if:` — branch here via outputs from a shell step.
-      - name: Resolve remote Terraform state bucket
-        id: tf_backend
-        run: |
-          if [ -n "${{ secrets.TF_STATE_BUCKET }}" ]; then
-            echo "has_state_bucket=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_state_bucket=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Cache Terraform state (local backend only)
-        if: steps.tf_backend.outputs.has_state_bucket == 'false'
+      - name: Cache Terraform state (local backend)
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
         with:
           path: terraform/terraform.tfstate
-          key: shopsmart-terraform-tfstate-main-v4
+          key: shopsmart-terraform-tfstate-main-v5
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
@@ -125,43 +114,12 @@ jobs:
           terraform_version: 1.9.0
           terraform_wrapper: false
 
+      # Init must run before fmt/validate/plan (local backend; no partial S3 backend in versions.tf).
+      - name: Terraform init
+        run: terraform init -input=false
+
       - name: Terraform fmt
         run: terraform fmt -check -recursive
-
-      # sai deploy-pipeline.yml bootstraps a dedicated state bucket before init (optional).
-      - name: Bootstrap Terraform state bucket
-        if: steps.tf_backend.outputs.has_state_bucket == 'true'
-        env:
-          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
-        run: |
-          set -euxo pipefail
-          R="${AWS_REGION}"
-          aws s3api head-bucket --bucket "${TF_STATE_BUCKET}" 2>/dev/null || {
-            if [ "$R" = "us-east-1" ]; then
-              aws s3api create-bucket --bucket "${TF_STATE_BUCKET}" --region "$R"
-            else
-              aws s3api create-bucket --bucket "${TF_STATE_BUCKET}" --region "$R" \
-                --create-bucket-configuration "LocationConstraint=${R}"
-            fi
-          }
-          aws s3api put-bucket-versioning \
-            --bucket "${TF_STATE_BUCKET}" \
-            --versioning-configuration Status=Enabled
-
-      - name: Terraform init
-        env:
-          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
-        run: |
-          set -euxo pipefail
-          if [ -z "${TF_STATE_BUCKET:-}" ]; then
-            terraform init -input=false -backend=false
-          else
-            terraform init -input=false \
-              -backend-config="bucket=${TF_STATE_BUCKET}" \
-              -backend-config="key=shopsmart/terraform.tfstate" \
-              -backend-config="region=${AWS_REGION}" \
-              -backend-config="encrypt=true"
-          fi
 
       - name: Terraform validate
         run: terraform validate

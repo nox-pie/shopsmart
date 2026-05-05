@@ -12,8 +12,7 @@
 #   ecs.tf          — ECR, ALB, ECS Fargate
 #   outputs.tf      — outputs for CI (ECR URL, ECS names, ALB DNS)
 #
-# Remote state (same idea as sai): GitHub Actions can set secret TF_STATE_BUCKET and bootstrap
-# the bucket before terraform init. Without TF_STATE_BUCKET, CI uses local state + Actions cache.
+# CI uses local state file terraform/terraform.tfstate + GitHub Actions cache (no partial S3 backend).
 #
 # Important: explicit IAM denies (e.g. Vocareum voc-cancel-cred) block CreateBucket/CreateVpc/etc.
 # regardless of Terraform syntax—requests match sai only when credentials allow the same APIs.
