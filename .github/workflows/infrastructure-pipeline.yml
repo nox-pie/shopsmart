@@ -73,6 +73,7 @@ jobs:
       ecs_cluster: ${{ steps.tfout.outputs.ecs_cluster }}
       ecs_service: ${{ steps.tfout.outputs.ecs_service }}
       alb_dns: ${{ steps.tfout.outputs.alb_dns }}
+      skip_phase3: ${{ steps.phase3_gate.outputs.skip }}
     env:
       TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
       TF_VAR_enable_s3: "true"
@@ -83,8 +84,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
+      # Gate Phase 3 jobs (secrets/vars cannot be used in job-level `if:` for docker-build / deploy-ecs).
+      - name: Phase 3 gate (SKIP_AWS_CREATES)
+        id: phase3_gate
+        run: |
+          if [ "${{ vars.SKIP_AWS_CREATES }}" = "true" ] || [ "${{ secrets.SKIP_AWS_CREATES }}" = "true" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # secrets.* cannot be used in step `if:` — branch here via outputs from a shell step.
+      - name: Resolve remote Terraform state bucket
+        id: tf_backend
+        run: |
+          if [ -n "${{ secrets.TF_STATE_BUCKET }}" ]; then
+            echo "has_state_bucket=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_state_bucket=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Cache Terraform state (local backend only)
-        if: ${{ secrets.TF_STATE_BUCKET == '' }}
+        if: steps.tf_backend.outputs.has_state_bucket == 'false'
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
         with:
           path: terraform/terraform.tfstate
@@ -109,7 +130,7 @@ jobs:
 
       # sai deploy-pipeline.yml bootstraps a dedicated state bucket before init (optional).
       - name: Bootstrap Terraform state bucket
-        if: ${{ secrets.TF_STATE_BUCKET != '' }}
+        if: steps.tf_backend.outputs.has_state_bucket == 'true'
         env:
           TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
         run: |
@@ -209,7 +230,7 @@ jobs:
     needs: terraform
     if: >-
       github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-      && !(vars.SKIP_AWS_CREATES == 'true' || secrets.SKIP_AWS_CREATES == 'true')
+      && needs.terraform.outputs.skip_phase3 != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -248,7 +269,7 @@ jobs:
     needs: [terraform, docker-build]
     if: >-
       github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-      && !(vars.SKIP_AWS_CREATES == 'true' || secrets.SKIP_AWS_CREATES == 'true')
+      && needs.terraform.outputs.skip_phase3 != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
